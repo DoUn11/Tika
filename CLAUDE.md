@@ -12,6 +12,39 @@ src/shared/에서 타입과 검증 스키마를 공유한다.
 - src/shared/    : 공유 타입, Zod 스키마, 상수
 - docs/          : 프로젝트 명세 문서
 
+## 아키텍처 핵심
+
+### 요청 흐름
+```
+컴포넌트 → useTickets → ticketApi.ts → app/api/ → src/server/services/ → Drizzle → Postgres
+```
+각 계층의 책임은 TRD 1.3 참조. src/client/와 src/server/는 서로 import하지 않으며
+src/shared/(타입·Zod 스키마·상수)를 통해서만 결합한다.
+
+### 엔드포인트 ↔ 기능
+```
+POST   /api/tickets              FR-001 생성
+GET    /api/tickets              FR-002 보드 조회 (BoardData)
+GET    /api/tickets/:id          FR-003 상세
+PATCH  /api/tickets/:id          FR-004 수정
+PATCH  /api/tickets/:id/complete FR-005 완료 / 완료 해제
+DELETE /api/tickets/:id          FR-006 삭제
+PATCH  /api/tickets/reorder      FR-007 상태·순서 변경
+```
+
+### 틀리기 쉬운 규칙
+- **Done 이동은 /reorder가 아니라 /complete를 쓴다.** /reorder는 status로
+  BACKLOG·TODO·IN_PROGRESS만 허용한다. completedAt 기록이 상태 변경과
+  함께 일어나야 하기 때문이다.
+- 이 분기는 useTickets.move()가 담당한다. Board 컴포넌트는 onMove 하나만
+  노출하고 두 엔드포인트의 존재를 모른다.
+- position은 1024 간격으로 관리하고 카드 사이 삽입 시 (prev+next)/2로
+  계산한다. 간격이 1 미만이면 칼럼 전체를 재정렬한다.
+- isOverdue는 DB 컬럼이 아니다. 조회 시 계산하는 파생 필드다.
+- startedAt은 TODO 최초 진입 시에만 기록하고 이미 값이 있으면 유지한다.
+- app/api/tickets/reorder/route.ts는 [id]/route.ts보다 먼저 매칭된다
+  (Next.js는 정적 세그먼트 우선).
+
 ## 기술 스택
 - Framework: Next.js 15 (App Router)
 - Language: TypeScript (strict mode)
