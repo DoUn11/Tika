@@ -1,8 +1,5 @@
-import {
-  badRequestError,
-  toValidationError,
-  withErrorHandling,
-} from '@/server/middleware/errorHandler';
+import { withErrorHandling } from '@/server/middleware/errorHandler';
+import { parseJsonBody } from '@/server/middleware/request';
 import { createTicket, getBoard } from '@/server/services/ticketService';
 import { createTicketSchema } from '@/shared/validations/ticketSchema';
 
@@ -16,18 +13,10 @@ export async function GET(): Promise<Response> {
 
 /** FR-001 티켓 생성. 요청 파싱 → 검증 → 서비스 호출 → 응답. */
 export async function POST(request: Request): Promise<Response> {
-  let body: unknown;
-  try {
-    body = await request.json();
-  } catch {
-    return Response.json(badRequestError('요청 본문이 올바른 JSON이 아닙니다'), { status: 400 });
-  }
+  const { data, error } = await parseJsonBody(request, createTicketSchema);
+  if (error) return error;
 
-  const parsed = createTicketSchema.safeParse(body);
-  if (!parsed.success) {
-    return Response.json(toValidationError(parsed.error), { status: 400 });
-  }
-
-  const ticket = await createTicket(parsed.data);
-  return Response.json(ticket, { status: 201 });
+  return withErrorHandling(async () =>
+    Response.json(await createTicket(data), { status: 201 }),
+  );
 }
