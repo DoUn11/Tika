@@ -541,7 +541,25 @@ type ConfirmDialogProps = {
 
 - 삭제 시 메시지: `정말 삭제하시겠습니까?`
 - 삭제는 **하드 삭제**이므로 복구할 수 없다 (FR-006)
-- `Esc` 키로 취소할 수 있다
+- 버튼은 **"확인"**과 **"취소"** 두 개다
+- `Esc` 키로 취소할 수 있다. "취소"를 누른 것과 같다
+- `isOpen`이 `false`면 아무것도 렌더링하지 않는다
+
+**접근성 (NFR-003)**
+
+`role="alertdialog"` + `aria-modal="true"`로 감싸고 `message`를 이름으로 준다.
+
+```html
+<div role="alertdialog" aria-modal="true" aria-label="정말 삭제하시겠습니까?">
+  <p>정말 삭제하시겠습니까?</p>
+  <button>취소</button>
+  <button>확인</button>
+</div>
+```
+
+역할을 주는 이유는 접근성만이 아니다. 5.3이 "삭제 버튼은 두 모드 모두에서
+노출된다"고 하므로 **편집 중에 삭제를 누르면 화면에 "취소" 버튼이 둘**이 된다
+(편집 취소와 삭제 취소). 다이얼로그가 독립된 영역으로 잡혀야 둘을 구분할 수 있다.
 
 ### 5.5 PriorityBadge
 
