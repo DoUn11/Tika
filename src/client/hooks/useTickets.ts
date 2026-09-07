@@ -97,18 +97,28 @@ export const useTickets = () => {
    * 초기화는 서버가 한다 (API_SPEC 13.1).
    *
    * 현재 상태를 조회할 필요가 없어 분기가 한 줄로 줄었다.
+   *
+   * 화면을 먼저 바꿔 두므로 실패하면 되돌려야 한다 (6.5). 되돌리기만 하면
+   * 사용자에게는 카드가 저절로 튕겨 나온 것으로 보이므로 문구도 함께 남긴다.
    */
   const move = useCallback(
     async (id: number, status: TicketStatus, position: number): Promise<void> => {
-      setBoard((previous) => applyMove(previous, id, status, position));
+      const snapshot = board;
+      setBoard(applyMove(board, id, status, position));
 
-      if (status === TICKET_STATUS.DONE) {
-        await completeTicket(id);
-      } else {
-        await reorderTicket(id, status, position);
+      try {
+        if (status === TICKET_STATUS.DONE) {
+          await completeTicket(id);
+        } else {
+          await reorderTicket(id, status, position);
+        }
+        setError(null);
+      } catch (cause) {
+        setBoard(snapshot);
+        setError(toError(cause));
       }
     },
-    [completeTicket, reorderTicket],
+    [board, completeTicket, reorderTicket],
   );
 
   return { board, isLoading, error, move, reorder: reorderTicket, complete: completeTicket, refetch };

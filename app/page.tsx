@@ -1,6 +1,7 @@
 'use client';
 
 import { Board } from '@/client/components/Board';
+import { ErrorBanner } from '@/client/components/ErrorBanner';
 import { useTickets } from '@/client/hooks/useTickets';
 
 /**
@@ -10,10 +11,11 @@ import { useTickets } from '@/client/hooks/useTickets';
  * 통합 테스트가 TC-INT-004·005에 있으므로 그때 배선한다.
  */
 const Page = () => {
-  const { board, move } = useTickets();
+  const { board, error, move } = useTickets();
 
   return (
     <main className="min-h-screen bg-slate-50 p-4">
+      <ErrorBanner message={error?.message ?? null} />
       <Board board={board} onMove={move} onTicketClick={() => {}} />
     </main>
   );
