@@ -217,6 +217,35 @@ describe('TC-API-001: POST /api/tickets — 티켓 생성', () => {
       expect(res.status).toBe(201);
     });
 
+    // 001-E8
+    it('본문이 올바른 JSON이 아니면 400과 VALIDATION_ERROR를 반환한다', async () => {
+      const res = await POST(
+        new Request('http://localhost/api/tickets', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: '{ "title": "깨진 JSON"',
+        }),
+      );
+
+      expect(res.status).toBe(400);
+
+      const body = await res.json();
+      // 400인데 INTERNAL_ERROR를 담으면 상태 코드와 어긋난다 (API_SPEC 2.4)
+      expect(body.error.code).toBe('VALIDATION_ERROR');
+    });
+
+    it('본문이 비어 있으면 400과 VALIDATION_ERROR를 반환한다', async () => {
+      const res = await POST(
+        new Request('http://localhost/api/tickets', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+        }),
+      );
+
+      expect(res.status).toBe(400);
+      expect((await res.json()).error.code).toBe('VALIDATION_ERROR');
+    });
+
     it('설명이 정확히 1000자이면 생성된다', async () => {
       const res = await POST(
         jsonRequest({ title: '새 티켓', description: 'ㄱ'.repeat(1000) }),

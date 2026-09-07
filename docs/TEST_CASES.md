@@ -151,6 +151,7 @@ describe('TC-API-00N: {METHOD} {경로} — {기능}', () => {
 | 001-E5 | `priority: "URGENT"` | 400, `우선순위는 LOW, MEDIUM, HIGH 중 선택해주세요` |
 | 001-E6 | `dueDate`가 어제 | 400, `종료예정일은 오늘 이후 날짜를 선택해주세요` |
 | 001-E7 | `title` 200자 (경계) | **201** — 통과해야 한다 |
+| 001-E8 | 본문이 올바른 JSON이 아님 | 400, `VALIDATION_ERROR` — 상태 코드와 에러 코드가 일치해야 한다 |
 
 ```typescript
 describe('TC-API-001: POST /api/tickets — 티켓 생성', () => {
