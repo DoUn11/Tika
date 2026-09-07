@@ -13,15 +13,16 @@
  */
 import { getDb } from '@/server/db';
 import { TICKET_STATUS, type TicketStatus } from '@/shared/constants/ticket';
+import type { BoardData, Ticket } from '@/shared/types/ticket';
 import { GET as getTicket } from '../../app/api/tickets/[id]/route';
 import { GET as getBoard } from '../../app/api/tickets/route';
 import { daysAgo, daysLater, hoursAgo, resetDatabase, seedTicket, today } from '../helpers';
 
 /** 보드 응답에서 티켓 하나를 꺼낸다. */
-const findOnBoard = (board: Record<string, { id: number }[]>, id: number) =>
+const findOnBoard = (board: BoardData, id: number): Ticket | undefined =>
   Object.values(board)
     .flat()
-    .find((t) => t.id === id);
+    .find((ticket) => ticket.id === id);
 
 const fetchDetail = (id: number) =>
   getTicket(new Request(`http://localhost/api/tickets/${id}`), {
