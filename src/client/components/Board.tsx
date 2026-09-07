@@ -2,14 +2,17 @@
 
 import {
   DndContext,
+  DragOverlay,
   KeyboardSensor,
   PointerSensor,
   closestCorners,
   useSensor,
   useSensors,
   type DragEndEvent,
+  type DragStartEvent,
 } from '@dnd-kit/core';
 import { sortableKeyboardCoordinates } from '@dnd-kit/sortable';
+import { useState } from 'react';
 import {
   COLUMN_LABEL,
   COLUMN_ORDER,
@@ -18,6 +21,7 @@ import {
 } from '@/shared/constants/ticket';
 import type { BoardData, Ticket } from '@/shared/types/ticket';
 import { Column } from './Column';
+import { TicketCardPreview } from './TicketCard';
 
 type BoardProps = {
   /** 칼럼별로 그룹화된 티켓. GET /api/tickets 응답을 그대로 받는다 */
@@ -37,6 +41,9 @@ const sortedByPosition = (tickets: Ticket[]): Ticket[] =>
 /** 그 티켓이 속한 칼럼을 찾는다 */
 const columnOfTicket = (board: BoardData, id: number): TicketStatus | null =>
   COLUMN_ORDER.find((status) => board[status].some((ticket) => ticket.id === id)) ?? null;
+
+const findTicket = (board: BoardData, id: number): Ticket | null =>
+  COLUMN_ORDER.flatMap((status) => board[status]).find((ticket) => ticket.id === id) ?? null;
 
 /**
  * 끼워 넣을 자리의 position을 구한다 (COMPONENT_SPEC 2.3, DATA_MODEL 5.3).
@@ -66,6 +73,9 @@ const positionAt = (tickets: Ticket[], index: number): number => {
  * 아니면 /reorder로 가는 분기는 useTickets가 맡는다 (2.4).
  */
 export const Board = ({ board, onMove, onTicketClick }: BoardProps) => {
+  // 오버레이에 그릴 카드. 드래그 중 외에는 티켓 데이터를 복제해 두지 않는다 (2.2)
+  const [activeTicket, setActiveTicket] = useState<Ticket | null>(null);
+
   const sensors = useSensors(
     // 제약이 없으면 pointerdown 즉시 드래그가 시작되어 뒤따르는 click이 삼켜진다.
     // 카드를 눌러 상세를 열 수 없게 되므로 8px 움직여야 드래그로 친다.
@@ -77,7 +87,12 @@ export const Board = ({ board, onMove, onTicketClick }: BoardProps) => {
     }),
   );
 
+  const handleDragStart = ({ active }: DragStartEvent): void => {
+    setActiveTicket(findTicket(board, Number(active.id)));
+  };
+
   const handleDragEnd = ({ active, over }: DragEndEvent): void => {
+    setActiveTicket(null);
     if (over === null) return;
 
     const id = Number(active.id);
@@ -107,7 +122,13 @@ export const Board = ({ board, onMove, onTicketClick }: BoardProps) => {
   };
 
   return (
-    <DndContext sensors={sensors} collisionDetection={closestCorners} onDragEnd={handleDragEnd}>
+    <DndContext
+      sensors={sensors}
+      collisionDetection={closestCorners}
+      onDragStart={handleDragStart}
+      onDragEnd={handleDragEnd}
+      onDragCancel={() => setActiveTicket(null)}
+    >
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
         {COLUMN_ORDER.map((status) => (
           <Column
@@ -119,6 +140,11 @@ export const Board = ({ board, onMove, onTicketClick }: BoardProps) => {
           />
         ))}
       </div>
+
+      {/* 커서를 따라다니는 카드 미리보기. 원래 자리에는 반투명 placeholder가 남는다 (4.6) */}
+      <DragOverlay>
+        {activeTicket === null ? null : <TicketCardPreview ticket={activeTicket} />}
+      </DragOverlay>
     </DndContext>
   );
 };

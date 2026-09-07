@@ -45,7 +45,20 @@ export const mockBoardLayout = (): void => {
   Element.prototype.getBoundingClientRect = function (this: Element): DOMRect {
     const columns = Array.from(document.querySelectorAll('section'));
     const column = this.tagName === 'SECTION' ? this : this.closest('section');
-    if (column === null) return rect(0, 0, 0, 0);
+
+    if (column === null) {
+      /**
+       * DragOverlay는 칼럼 바깥에 그려진다. @dnd-kit은 오버레이가 있으면
+       * 그 노드의 사각형으로 충돌을 판정하므로, 0을 돌려주면 어느 칼럼도
+       * 찾지 못한다. 실제 브라우저에서 오버레이는 집어 든 카드 자리에서
+       * 출발하므로 그 카드의 사각형을 그대로 쓴다.
+       *
+       * @dnd-kit이 드래그 중인 카드에 aria-pressed="true"를 붙인다.
+       */
+      const dragged = document.querySelector('[aria-pressed="true"]');
+      if (dragged !== null && dragged !== this) return dragged.getBoundingClientRect();
+      return rect(0, 0, 0, 0);
+    }
 
     const x = columns.indexOf(column as HTMLElement) * COLUMN_WIDTH;
     if (this === column) return rect(x, 0, COLUMN_WIDTH - 20, COLUMN_HEIGHT);

@@ -26,6 +26,36 @@ const accessibleName = (ticket: Ticket): string => {
   return ticket.isOverdue ? `${name}, 일정 초과` : name;
 };
 
+/** 오버듀는 색상만으로 구분하지 않는다. 좌측 띠·테두리·⚠가 함께 드러난다 (4.4, NFR-003) */
+const cardStyle = (ticket: Ticket): string => {
+  const overdue = ticket.isOverdue
+    ? 'border-red-400 border-l-4 border-l-red-500'
+    : 'border-slate-200 border-l-4 border-l-transparent';
+  return `rounded-md border bg-white p-3 shadow-sm ${overdue}`;
+};
+
+/** 카드에 보이는 내용. 실제 카드와 드래그 미리보기가 함께 쓴다. */
+const CardBody = ({ ticket }: { ticket: Ticket }) => (
+  <>
+    <p className="line-clamp-2 text-sm font-medium break-words text-slate-900">{ticket.title}</p>
+
+    <div className="mt-3 flex items-center justify-between gap-2">
+      <PriorityBadge priority={ticket.priority} />
+
+      <div className="flex items-center gap-2 text-xs">
+        {ticket.status === TICKET_STATUS.DONE && <span className="text-emerald-600">✓ 완료</span>}
+
+        {ticket.dueDate !== null && (
+          <span className={ticket.isOverdue ? 'font-semibold text-red-600' : 'text-slate-500'}>
+            {ticket.isOverdue && <span aria-hidden="true">⚠ </span>}
+            {toMonthDay(ticket.dueDate)}
+          </span>
+        )}
+      </div>
+    </div>
+  </>
+);
+
 /**
  * 개별 티켓 카드 (COMPONENT_SPEC 4장).
  *
@@ -54,11 +84,6 @@ export const TicketCard = ({ ticket, onClick }: TicketCardProps) => {
     listeners?.onKeyDown?.(event);
   };
 
-  // 오버듀는 색상만으로 구분하지 않는다. 좌측 띠·테두리·⚠가 함께 드러난다 (4.4, NFR-003)
-  const overdueStyle = ticket.isOverdue
-    ? 'border-red-400 border-l-4 border-l-red-500'
-    : 'border-slate-200 border-l-4 border-l-transparent';
-
   return (
     <div
       ref={setNodeRef}
@@ -70,26 +95,24 @@ export const TicketCard = ({ ticket, onClick }: TicketCardProps) => {
       onClick={onClick}
       onKeyDown={handleKeyDown}
       style={{ transform: CSS.Transform.toString(transform), transition }}
-      className={`cursor-pointer rounded-md border bg-white p-3 shadow-sm transition hover:shadow focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${overdueStyle} ${isDragging ? 'opacity-50' : ''}`}
+      className={`${cardStyle(ticket)} cursor-pointer transition hover:shadow focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${isDragging ? 'opacity-40' : ''}`}
     >
-      <p className="line-clamp-2 text-sm font-medium break-words text-slate-900">{ticket.title}</p>
-
-      <div className="mt-3 flex items-center justify-between gap-2">
-        <PriorityBadge priority={ticket.priority} />
-
-        <div className="flex items-center gap-2 text-xs">
-          {ticket.status === TICKET_STATUS.DONE && (
-            <span className="text-emerald-600">✓ 완료</span>
-          )}
-
-          {ticket.dueDate !== null && (
-            <span className={ticket.isOverdue ? 'font-semibold text-red-600' : 'text-slate-500'}>
-              {ticket.isOverdue && <span aria-hidden="true">⚠ </span>}
-              {toMonthDay(ticket.dueDate)}
-            </span>
-          )}
-        </div>
-      </div>
+      <CardBody ticket={ticket} />
     </div>
   );
 };
+
+/**
+ * 드래그 중 커서를 따라다니는 미리보기 (COMPONENT_SPEC 4.6).
+ *
+ * TicketCard를 그대로 쓰지 않는 이유는 useSortable이 같은 id로 두 번
+ * 등록되기 때문이다. 나중에 등록된 쪽이 노드 참조를 덮어써 위치 측정이 깨진다.
+ *
+ * aria-hidden으로 접근성 트리에서 뺀다. 드래그 상황은 @dnd-kit이 자체
+ * 라이브 리전으로 이미 알리므로, 여기서 또 읽히면 같은 카드가 두 번 들린다.
+ */
+export const TicketCardPreview = ({ ticket }: { ticket: Ticket }) => (
+  <div aria-hidden="true" className={`${cardStyle(ticket)} cursor-grabbing shadow-lg`}>
+    <CardBody ticket={ticket} />
+  </div>
+);
