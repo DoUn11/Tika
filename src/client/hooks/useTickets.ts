@@ -1,10 +1,10 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { complete, getBoard, remove, reorder, update } from '@/client/api/ticketApi';
+import { complete, create, getBoard, remove, reorder, update } from '@/client/api/ticketApi';
 import { COLUMN_ORDER, TICKET_STATUS, type TicketStatus } from '@/shared/constants/ticket';
 import type { BoardData } from '@/shared/types/ticket';
-import type { UpdateTicketInput } from '@/shared/validations/ticketSchema';
+import type { CreateTicketInput, UpdateTicketInput } from '@/shared/validations/ticketSchema';
 
 /** 4개 키가 항상 존재해야 한다 (API_SPEC 2.2) */
 export const createEmptyBoard = (): BoardData => ({
@@ -69,7 +69,7 @@ export const useTickets = () => {
   }, [refetch]);
 
   /**
-   * FR-004 티켓 수정 · FR-006 티켓 삭제.
+   * FR-001 티켓 생성 · FR-004 티켓 수정 · FR-006 티켓 삭제.
    *
    * 낙관적 업데이트를 쓰지 않는다. 카드 위치가 바뀌지 않아 즉시 반영의
    * 이득이 작고, 응답 뒤 보드를 다시 읽는 편이 단순하다 (COMPONENT_SPEC 6.5).
@@ -77,6 +77,19 @@ export const useTickets = () => {
    * 실패해도 던지지 않고 문구만 남긴다. 보드를 건드리기 전에 멈추므로
    * 되돌릴 것이 없고, 실패는 ErrorBanner 한 곳으로 모은다 (5.5).
    */
+  const createTicket = useCallback(
+    async (input: CreateTicketInput): Promise<void> => {
+      try {
+        await create(input);
+        setError(null);
+        await refetch();
+      } catch (cause) {
+        setError(toError(cause));
+      }
+    },
+    [refetch],
+  );
+
   const updateTicket = useCallback(
     async (id: number, input: UpdateTicketInput): Promise<void> => {
       try {
@@ -162,6 +175,7 @@ export const useTickets = () => {
     isLoading,
     error,
     move,
+    create: createTicket,
     update: updateTicket,
     remove: removeTicket,
     reorder: reorderTicket,
