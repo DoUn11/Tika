@@ -134,7 +134,7 @@ onMove(id, status, position)   그 외               → reorder()   → PATCH /
 | `SortableContext` | 칼럼별로 하나씩. 칼럼 내 정렬 담당 |
 | `DragOverlay` | 드래그 중 커서를 따라다니는 카드 미리보기 |
 | `PointerSensor` | 마우스·터치 입력 (NFR-002) |
-| `KeyboardSensor` | 키보드 조작 (NFR-003) |
+| `KeyboardSensor` | 키보드 조작 (NFR-003). 활성화 키를 `Space`로 좁힌다 — `Enter`는 카드 상세 열기가 쓴다 (4.7) |
 
 ### 2.6 반응형 (NFR-002)
 
@@ -307,7 +307,7 @@ REQUIREMENTS.md 6장의 정의를 그대로 따른다.
 
 | 항목 | 구현 |
 |------|------|
-| 키보드 내비게이션 | `Tab`으로 카드 이동, `Enter`/`Space`로 상세 모달 열기 |
+| 키보드 내비게이션 | `Tab`으로 카드 이동, `Enter`로 상세 모달 열기 |
 | 키보드 드래그 | @dnd-kit `KeyboardSensor` — `Space`로 집고, 방향키로 이동, `Space`로 놓기, `Esc`로 취소 |
 | `aria-label` | `"{제목}, {우선순위} 우선순위, {상태} 칼럼"` (오버듀 시 `", 일정 초과"` 추가) |
 | `role` | 드래그 핸들에 `role="button"` |
@@ -317,6 +317,29 @@ REQUIREMENTS.md 6장의 정의를 그대로 따른다.
 aria-label 예시:
 "테스트 케이스 작성, HIGH 우선순위, Backlog 칼럼, 일정 초과"
 ```
+
+#### `Enter`와 `Space`의 역할 분리
+
+카드는 하나의 요소로 **상세 열기**와 **드래그 집기**를 모두 받으므로 두 키가 겹치면 안 된다.
+
+| 키 | 동작 |
+|----|------|
+| `Enter` | 상세 모달 열기 |
+| `Space` | 드래그 집기 / 놓기 |
+
+@dnd-kit `KeyboardSensor`의 기본 활성화 키는 `Space`와 `Enter` 둘 다이므로,
+`Enter`를 눌렀을 때 모달 열기와 드래그 시작이 동시에 걸린다.
+2.5의 센서 구성에서 활성화 키를 `Space`로 좁혀 충돌을 없앤다.
+
+```typescript
+useSensor(KeyboardSensor, {
+  keyboardCodes: { start: ['Space'], cancel: ['Escape'], end: ['Space'] },
+  coordinateGetter: sortableKeyboardCoordinates,
+})
+```
+
+`Space`를 상세 열기에서 뺀 이유는, 드래그가 카드의 주된 조작이고
+상세 열기는 `Enter`와 클릭으로 이미 도달할 수 있기 때문이다.
 
 ---
 
