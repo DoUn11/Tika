@@ -10,7 +10,11 @@ import {
 } from '@/shared/constants/ticket';
 import type { BoardData, Ticket } from '@/shared/types/ticket';
 import { isPastDue } from '@/shared/utils/date';
-import type { CreateTicketInput, UpdateTicketInput } from '@/shared/validations/ticketSchema';
+import type {
+  CreateTicketInput,
+  ReorderInput,
+  UpdateTicketInput,
+} from '@/shared/validations/ticketSchema';
 
 /** dueDate가 지났고 아직 완료되지 않았으면 초과다 (FR-008). 당일은 초과가 아니다. */
 const computeIsOverdue = (row: TicketRow): boolean => {
@@ -147,6 +151,69 @@ export const updateTicket = async (
     .returning();
 
   return row ? toTicket(row) : null;
+};
+
+/**
+ * FR-007 상태·순서 변경. 드래그앤드롭의 서버 측 처리다.
+ *
+ * 상태·순서 변경과 재정렬을 하나의 트랜잭션으로 묶어 원자성을 보장한다 (NFR-004).
+ * 중간에 실패하면 순서만 바뀌고 상태는 그대로인 상황이 생기지 않는다.
+ *
+ * 날짜 필드는 **이전 상태**에 따라 달라지므로 현재 행을 먼저 읽는다.
+ *
+ * 존재하지 않는 ID면 null을 반환하며, 호출부가 404로 변환한다.
+ */
+export const reorderTicket = async (input: ReorderInput): Promise<BoardData | null> => {
+  const { ticketId, status, position } = input;
+
+  const found = await getDb().transaction(async (tx) => {
+    const [current] = await tx.select().from(tickets).where(eq(tickets.id, ticketId)).limit(1);
+    if (!current) return false;
+
+    const now = new Date();
+    const updates: Partial<NewTicketRow> = { status, position, updatedAt: now };
+
+    // startedAt — TODO 최초 진입 시 기록, TODO에서 BACKLOG로 되돌릴 때만 초기화.
+    // IN_PROGRESS에서 BACKLOG로 가는 경우는 명세상 초기화 대상이 아니다 (FR-007).
+    if (status === TICKET_STATUS.TODO && current.startedAt === null) {
+      updates.startedAt = now;
+    } else if (current.status === TICKET_STATUS.TODO && status === TICKET_STATUS.BACKLOG) {
+      updates.startedAt = null;
+    }
+
+    // completedAt — DONE에서 빠져나오면 완료 해제.
+    // 이동 대상은 항상 DONE이 아니므로 조건은 이전 상태만 보면 된다.
+    if (current.status === TICKET_STATUS.DONE) {
+      updates.completedAt = null;
+    }
+
+    await tx.update(tickets).set(updates).where(eq(tickets.id, ticketId));
+
+    // position이 INTEGER라 (5+6)/2는 5가 되어 앞 카드와 겹친다.
+    // 대상 칼럼에 중복이 생기면 0부터 POSITION_GAP 간격으로 다시 매긴다 (API_SPEC 9.2).
+    const columnRows = await tx
+      .select({ id: tickets.id, position: tickets.position })
+      .from(tickets)
+      .where(eq(tickets.status, status))
+      .orderBy(asc(tickets.position), asc(tickets.id));
+
+    const hasCollision = columnRows.some(
+      (row, index) => index > 0 && row.position === columnRows[index - 1]!.position,
+    );
+
+    if (hasCollision) {
+      for (const [index, row] of columnRows.entries()) {
+        await tx
+          .update(tickets)
+          .set({ position: index * POSITION_GAP })
+          .where(eq(tickets.id, row.id));
+      }
+    }
+
+    return true;
+  });
+
+  return found ? getBoard() : null;
 };
 
 /**

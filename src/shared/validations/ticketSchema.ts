@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { TICKET_PRIORITY } from '@/shared/constants/ticket';
+import { TICKET_PRIORITY, TICKET_STATUS } from '@/shared/constants/ticket';
 import { isPastDue } from '@/shared/utils/date';
 
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
@@ -60,3 +60,20 @@ export const updateTicketSchema = z.object({
 });
 
 export type UpdateTicketInput = z.infer<typeof updateTicketSchema>;
+
+/**
+ * FR-007 상태·순서 변경 요청 검증.
+ *
+ * 이동 **대상**으로 DONE은 허용하지 않는다. Done으로 들어가는 것은
+ * `/complete`가 담당한다. DONE에서 빠져나오는 이동은 대상이 DONE이
+ * 아니므로 이 스키마를 통과한다 (API_SPEC 13.1).
+ */
+export const reorderSchema = z.object({
+  ticketId: z.number({ required_error: '티켓을 선택해주세요' }).int().positive(),
+  status: z.enum([TICKET_STATUS.BACKLOG, TICKET_STATUS.TODO, TICKET_STATUS.IN_PROGRESS], {
+    errorMap: () => ({ message: '상태는 BACKLOG, TODO, IN_PROGRESS 중 선택해주세요' }),
+  }),
+  position: z.number({ required_error: '위치를 지정해주세요' }).int(),
+});
+
+export type ReorderInput = z.infer<typeof reorderSchema>;
