@@ -148,3 +148,24 @@ export const updateTicket = async (
 
   return row ? toTicket(row) : null;
 };
+
+/**
+ * FR-005 티켓 완료. status를 DONE으로 바꾸고 종료일을 기록한다.
+ *
+ * startedAt은 건드리지 않는다. 착수 시각은 완료해도 바뀌지 않는다.
+ * 이미 DONE인 티켓을 다시 호출하면 completedAt이 현재 시각으로 갱신된다.
+ *
+ * 완료 해제는 이 함수가 아니라 reorder가 담당한다. 이동 대상이 DONE이
+ * 아니므로 reorder의 관할이며, 각 함수가 한 방향만 책임진다 (API_SPEC 13.1).
+ */
+export const completeTicket = async (id: number): Promise<Ticket | null> => {
+  const now = new Date();
+
+  const [row] = await getDb()
+    .update(tickets)
+    .set({ status: TICKET_STATUS.DONE, completedAt: now, updatedAt: now })
+    .where(eq(tickets.id, id))
+    .returning();
+
+  return row ? toTicket(row) : null;
+};
