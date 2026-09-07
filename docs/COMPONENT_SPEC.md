@@ -117,9 +117,10 @@ Done으로의 이동은 `completedAt` 기록이 함께 일어나야 하므로 `P
 ```
 Board                          useTickets.move()
 ─────                          ─────────────────
-어느 칼럼이든                   status === 'DONE'        → complete()  → PATCH /:id/complete
-onMove(id, status, position)   현재 DONE → 다른 칼럼     → complete()  → PATCH /:id/complete
-                               그 외                     → reorder()   → PATCH /reorder
+어느 칼럼이든                   status === 'DONE'  → complete()  → PATCH /:id/complete
+onMove(id, status, position)   그 외               → reorder()   → PATCH /reorder
+                                                                   (DONE에서 나오면
+                                                                    서버가 completedAt 초기화)
 ```
 
 **이렇게 나눈 이유**: Board는 화면 좌표를 상태·순서로 번역하는 것까지만 책임진다.
@@ -515,11 +516,8 @@ Board의 `onMove`에 연결되는 유일한 진입점이다.
 
 ```typescript
 const move = async (id: number, status: TicketStatus, position: number) => {
-  const current = findTicket(id);
-  const leavingDone = current?.status === TICKET_STATUS.DONE;
-
-  if (status === TICKET_STATUS.DONE || leavingDone) {
-    await complete(id);          // PATCH /api/tickets/:id/complete
+  if (status === TICKET_STATUS.DONE) {
+    await complete(id);                   // PATCH /api/tickets/:id/complete
   } else {
     await reorder(id, status, position);  // PATCH /api/tickets/reorder
   }
@@ -529,8 +527,10 @@ const move = async (id: number, status: TicketStatus, position: number) => {
 | 조건 | 호출 | 이유 |
 |------|------|------|
 | 대상이 `DONE` | `complete()` | `completedAt` 기록이 필요하다 |
-| 현재 `DONE` → 다른 칼럼 | `complete()` | `completedAt` 초기화가 필요하다 |
-| 그 외 | `reorder()` | 상태·순서만 바뀐다 |
+| 그 외 (DONE에서 나오는 경우 포함) | `reorder()` | 대상이 DONE이 아니므로 reorder의 관할이며, 서버가 `completedAt`을 초기화한다 |
+
+**이동 대상만 보면 된다.** 현재 상태를 조회할 필요가 없어 분기가 한 줄로 줄었다.
+Done에서 빠져나오는 이동도 대상이 DONE이 아니므로 `reorder()`가 처리한다 (API_SPEC 13.1).
 
 ### 6.3 메서드 ↔ API 매핑
 

@@ -39,7 +39,7 @@
 | FR-002 | `GET` | `/api/tickets` | 보드 조회 (칼럼별 그룹화) | 200 |
 | FR-003 | `GET` | `/api/tickets/:id` | 티켓 상세 조회 | 200 |
 | FR-004 | `PATCH` | `/api/tickets/:id` | 티켓 수정 | 200 |
-| FR-005 | `PATCH` | `/api/tickets/:id/complete` | 완료 처리 / 완료 해제 | 200 |
+| FR-005 | `PATCH` | `/api/tickets/:id/complete` | 완료 처리 | 200 |
 | FR-006 | `DELETE` | `/api/tickets/:id` | 티켓 삭제 | 204 |
 | FR-007 | `PATCH` | `/api/tickets/reorder` | 상태·순서 변경 (드래그앤드롭) | 200 |
 | FR-008 | — | — | 일정 초과 판정 (파생 필드, 전용 엔드포인트 없음) | — |
@@ -484,17 +484,20 @@ curl -X PATCH http://localhost:3000/api/tickets/4 \
 
 ---
 
-## 7. FR-005 · 완료 처리 / 완료 해제
+## 7. FR-005 · 완료 처리
 
 ```
 PATCH /api/tickets/:id/complete
 ```
 
 티켓을 Done 칼럼으로 이동하여 완료 처리하고 종료일을 자동 설정한다.
-Done에서 다른 칼럼으로 되돌리는 것도 이 엔드포인트로 처리한다.
 
 > **Done으로의 이동은 FR-007(`/reorder`)이 아닌 이 엔드포인트를 사용한다.**
 > `completedAt` 기록이 상태 변경과 함께 일어나야 하기 때문이다.
+>
+> **완료 해제는 반대로 `/reorder`가 담당한다** (9장). Done에서 빠져나오는 이동은
+> 대상이 DONE이 아니므로 `/reorder`로 표현되며, 그때 `completedAt`이 초기화된다.
+> 각 엔드포인트가 한 방향만 책임진다.
 
 ### 7.1 요청
 
@@ -502,33 +505,18 @@ Done에서 다른 칼럼으로 되돌리는 것도 이 엔드포인트로 처리
 |----------|------|------|------|
 | `id` | path | number | 티켓 ID |
 
-**본문**
-
-| 필드 | 타입 | 필수 | 설명 |
-|------|------|------|------|
-| `status` | string | X | 이동할 상태. 생략 시 `DONE` (완료 처리) |
-| `position` | number | X | 이동 대상 칼럼 내 위치 |
-
-**완료 처리** — 본문 생략 또는 빈 객체
-
-```json
-{}
-```
-
-**완료 해제** — Done에서 다른 칼럼으로 복귀
-
-```json
-{ "status": "IN_PROGRESS", "position": 0 }
-```
+**본문 없음.** 이 엔드포인트는 완료 처리 한 가지만 수행한다.
 
 ### 7.2 처리 규칙
 
-| 이동 | `status` | `completedAt` | `startedAt` |
-|------|----------|--------------|------------|
-| → DONE | `DONE` | `now()` | 유지 |
-| DONE → 다른 칼럼 | 요청 값 | `null` | 유지 |
+| 필드 | 처리 |
+|------|------|
+| `status` | `DONE`으로 설정 |
+| `completedAt` | 현재 시각 기록 |
+| `startedAt` | **유지** — 착수 시각은 완료해도 바뀌지 않는다 |
+| `updatedAt` | 자동 갱신 |
 
-- `updatedAt`을 자동 갱신한다
+- 이미 `DONE`인 티켓을 다시 호출하면 `completedAt`이 현재 시각으로 갱신된다
 - 완료 처리된 티켓은 `completedAt` 기준 24시간 동안만 Done 칼럼에 표시된다 (FR-002)
 
 ### 7.3 응답
@@ -567,15 +555,13 @@ Done에서 다른 칼럼으로 되돌리는 것도 이 엔드포인트로 처리
 ### 7.4 예시
 
 ```bash
-# 완료 처리
-curl -X PATCH http://localhost:3000/api/tickets/6/complete \
-  -H "Content-Type: application/json" \
-  -d '{}'
+# 완료 처리 — 본문 없음
+curl -X PATCH http://localhost:3000/api/tickets/6/complete
 
-# 완료 해제
-curl -X PATCH http://localhost:3000/api/tickets/6/complete \
+# 완료 해제는 /reorder 를 쓴다 (9장)
+curl -X PATCH http://localhost:3000/api/tickets/reorder \
   -H "Content-Type: application/json" \
-  -d '{"status":"IN_PROGRESS","position":0}'
+  -d '{"ticketId":6,"status":"IN_PROGRESS","position":0}'
 ```
 
 ---
@@ -650,7 +636,8 @@ PATCH /api/tickets/reorder
 }
 ```
 
-> **`DONE`은 허용하지 않는다.** Done으로의 이동은 FR-005(`PATCH /api/tickets/:id/complete`)를 사용한다.
+> **이동 대상으로 `DONE`은 허용하지 않는다.** Done으로의 이동은 FR-005(`PATCH /api/tickets/:id/complete`)를 사용한다.
+> 다만 DONE에서 **빠져나오는** 이동은 대상이 DONE이 아니므로 이 API로 처리하며, 이때 `completedAt`이 초기화된다.
 
 ### 9.2 처리 규칙
 
@@ -668,11 +655,15 @@ PATCH /api/tickets/reorder
 
 **날짜 필드 자동 처리**
 
-| 이동 | `startedAt` |
-|------|------------|
-| → TODO | `now()` (이미 값이 있으면 유지) |
-| TODO → BACKLOG | `null` |
-| 그 외 | 유지 |
+| 이동 | `startedAt` | `completedAt` |
+|------|------------|--------------|
+| → TODO | `now()` (이미 값이 있으면 유지) | 유지 |
+| TODO → BACKLOG | `null` | 유지 |
+| **DONE → 다른 칼럼** | 유지 | **`null`** (완료 해제) |
+| 그 외 | 유지 | 유지 |
+
+> 완료 해제가 여기 있는 이유: 이동 대상이 DONE이 아니므로 `/reorder`의 관할이다.
+> `/complete`는 완료 처리만 담당한다 (7장).
 
 ### 9.3 응답
 
@@ -800,11 +791,21 @@ isOverdue = (dueDate != null) AND (dueDate < 오늘) AND (status != 'DONE')
 
 ## 13. 확인 필요 사항
 
-### 13.1 `/complete`의 요청 본문
+### 13.1 `/complete`의 요청 본문 — 해소됨
 
-REQUIREMENTS.md FR-005는 처리 규칙("DONE 이동 시 `completedAt = now()`", "DONE에서 다른 칼럼으로 이동 시 `completedAt = null`")만 정의하고 **요청 본문을 명시하지 않는다.**
+REQUIREMENTS.md FR-005가 요청 본문을 명시하지 않아 정리가 필요했다.
+**엔드포인트별 책임 분리**로 확정했다.
 
-완료 해제 시에는 어느 칼럼의 어느 위치로 돌아갈지 지정해야 하므로, 본 문서는 선택 필드 `status`·`position`을 두고 **생략 시 완료 처리**로 동작하도록 정의했다(7.1). 다른 형태를 의도했다면 알려주기 바란다.
+| 방향 | 엔드포인트 | 근거 |
+|------|-----------|------|
+| 완료 (→ DONE) | `PATCH /:id/complete` (본문 없음) | `completedAt` 기록이 필요 |
+| 완료 해제 (DONE →) | `PATCH /reorder` | 이동 **대상**이 DONE이 아니므로 reorder의 관할 |
+
+FR-007의 제약은 "이동 대상이 DONE이면 안 된다"이지 "DONE인 티켓을 옮길 수 없다"가
+아니다. 따라서 완료 해제는 원래부터 `/reorder`로 표현 가능하며, 이렇게 나누면
+각 엔드포인트가 한 방향만 책임진다.
+
+`/complete`는 본문이 필요 없어지고, 클라이언트의 분기도 단순해진다.
 
 ### 13.2 `reorder` 응답 범위
 

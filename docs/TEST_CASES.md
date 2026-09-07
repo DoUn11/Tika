@@ -314,43 +314,49 @@ it('description에 null을 전송하면 값이 삭제된다', async () => {
 
 ### TC-API-005 · `PATCH /api/tickets/:id/complete` (FR-005)
 
+**요청 본문이 없다.** 이 엔드포인트는 완료 처리 한 가지만 수행한다.
+완료 **해제**는 `/reorder`의 관할이므로 TC-API-007이 다룬다 (API_SPEC 13.1).
+
 **정상 케이스**
 
 | ID | 시나리오 | 기대 결과 |
 |----|----------|-----------|
 | 005-N1 | 본문 없이 호출 | 200, `status = DONE`, `completedAt` 설정 |
 | 005-N2 | 완료 시 `startedAt` | 기존 값 **유지** |
-| 005-N3 | `{ status: 'TODO', position: 0 }` 전송 | `status = TODO`, `completedAt = null` |
-| 005-N4 | 완료 해제 후 재완료 | `completedAt`이 새 시각으로 설정 |
+| 005-N3 | 어느 칼럼에서든 완료 | BACKLOG·TODO·IN_PROGRESS 모두 DONE이 된다 |
+| 005-N4 | 이미 DONE인 티켓을 재호출 | `completedAt`이 현재 시각으로 갱신된다 |
+| 005-N5 | `updatedAt` | 갱신된다 |
+| 005-N6 | 완료 후 보드 조회 | Done 칼럼에 나타난다 (24시간 이내) |
 
 **예외 케이스**
 
 | ID | 시나리오 | 기대 결과 |
 |----|----------|-----------|
 | 005-E1 | 존재하지 않는 ID | 404, `티켓을 찾을 수 없습니다` |
-| 005-E2 | 잘못된 `status` 값 | 400 |
+| 005-E2 | 숫자가 아닌 ID | 404 |
 
 ```typescript
 it('완료 처리하면 status가 DONE이 되고 completedAt이 기록된다', async () => {
-  const { id } = await seedTicket({ status: 'IN_PROGRESS', completedAt: null });
+  const seeded = await seedTicket({ status: 'IN_PROGRESS', completedAt: null });
 
-  const body = await (await PATCH(jsonRequest({}), { params: { id } })).json();
+  const body = await (await complete(seeded.id)).json();
 
   expect(body.status).toBe('DONE');
   expect(body.completedAt).not.toBeNull();
 });
 
-it('Done에서 다른 칼럼으로 되돌리면 completedAt이 초기화된다', async () => {
-  const { id } = await seedTicket({ status: 'DONE', completedAt: new Date() });
+it('완료해도 시작일은 유지된다', async () => {
+  const startedAt = hoursAgo(3);
+  const seeded = await seedTicket({ status: 'IN_PROGRESS', startedAt });
 
-  const body = await (await PATCH(
-    jsonRequest({ status: 'IN_PROGRESS', position: 0 }), { params: { id } },
-  )).json();
+  const body = await (await complete(seeded.id)).json();
 
-  expect(body.status).toBe('IN_PROGRESS');
-  expect(body.completedAt).toBeNull();
+  expect(Date.parse(body.startedAt)).toBe(startedAt.getTime());
 });
 ```
+
+> 완료 해제(`Done → 다른 칼럼`)는 TC-API-007에서 검증한다.
+> 이동 대상이 DONE이 아니므로 `/reorder`가 담당하며, 그때 `completedAt`이 초기화된다.
 
 ---
 
@@ -381,6 +387,8 @@ it('Done에서 다른 칼럼으로 되돌리면 completedAt이 초기화된다',
 | 007-N6 | 두 카드 사이 삽입 | `position`이 두 값 사이 |
 | 007-N7 | 간격이 1 미만인 칼럼 | 칼럼 전체가 1024 간격으로 재정렬 |
 | 007-N8 | 역방향 이동 (IN_PROGRESS → BACKLOG) | 허용됨 |
+| 007-N9 | **DONE → 다른 칼럼 (완료 해제)** | `completedAt = null`, `status` 반영 |
+| 007-N10 | 완료 해제 시 `startedAt` | 기존 값 **유지** |
 
 **예외 케이스**
 

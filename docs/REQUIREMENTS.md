@@ -101,16 +101,23 @@
 
 ---
 
-### FR-005: 티켓 완료 (완료일 업데이트)
+### FR-005: 티켓 완료
 
 **설명**: 티켓을 Done 칼럼으로 이동하여 완료 처리하고, 종료일을 자동 설정한다.
 
 **API 매핑**: `PATCH /api/tickets/:id/complete`
 
+**요청 본문**: 없음. 이 엔드포인트는 완료 처리 한 가지만 수행한다.
+
 **처리 규칙**:
-- DONE으로 이동 시: completedAt = 현재 시각, status = DONE
-- DONE에서 다른 칼럼으로 이동 시: completedAt = null
+- status = DONE, completedAt = 현재 시각
+- startedAt은 유지한다 (착수 시각은 완료해도 바뀌지 않는다)
+- 이미 DONE인 티켓을 다시 호출하면 completedAt이 현재 시각으로 갱신된다
 - Done 칼럼에는 completedAt 기준 24시간 이내 티켓만 표시
+
+> **완료 해제는 FR-007이 담당한다.** Done에서 다른 칼럼으로 되돌리는 것은
+> 이동 대상이 DONE이 아니므로 `PATCH /api/tickets/reorder`로 표현된다.
+> 각 엔드포인트가 한 방향만 책임진다.
 
 **성공 응답**: 200 OK + 업데이트된 티켓 데이터
 **실패 응답**: 404 Not Found
@@ -143,7 +150,9 @@
 | status | enum | 이동 대상 칼럼 (BACKLOG, TODO, IN_PROGRESS) |
 | position | number | 칼럼 내 새 위치 |
 
-> DONE은 허용하지 않는다. Done으로의 이동은 `PATCH /api/tickets/:id/complete` (FR-005)를 사용한다.
+> 이동 **대상**으로 DONE은 허용하지 않는다. Done으로의 이동은
+> `PATCH /api/tickets/:id/complete` (FR-005)를 사용한다.
+> 다만 DONE에서 **빠져나오는** 이동은 대상이 DONE이 아니므로 이 API로 처리한다.
 
 **처리 규칙**:
 - 상태(status)와 순서(position) 동시 업데이트
@@ -156,8 +165,9 @@
 - 맨 뒤 삽입: 마지막 카드의 position + 1024
 
 **비즈니스 로직**:
-- TODO로 이동 시: startedAt = 현재 시각
+- TODO로 이동 시: startedAt = 현재 시각 (이미 값이 있으면 유지)
 - TODO에서 BACKLOG로 이동 시: startedAt = null
+- **DONE에서 다른 칼럼으로 이동 시: completedAt = null** (완료 해제)
 
 **검증 에러 메시지**:
 | 조건 | 메시지 |

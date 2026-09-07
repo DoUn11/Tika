@@ -342,7 +342,7 @@ export type BoardData = Record<TicketStatus, Ticket[]>;
 | BR-02 | TODO로 이동 시 `started_at = now()`. **최초 1회만 기록하며, 이미 값이 있으면 유지한다** | 칼럼 이동 | FR-007 |
 | BR-03 | TODO에서 BACKLOG로 되돌리면 `started_at = NULL` | 칼럼 이동 | FR-007 |
 | BR-04 | Done으로 이동 시 `completed_at = now()`, `status = 'DONE'` | 완료 처리 | FR-005 |
-| BR-05 | Done에서 다른 칼럼으로 복귀 시 `completed_at = NULL` | 칼럼 이동 | FR-005 |
+| BR-05 | Done에서 다른 칼럼으로 복귀 시 `completed_at = NULL` | 칼럼 이동 (`reorder`) | FR-007 |
 | BR-06 | 일정 초과 판정: `due_date < 오늘 AND status != 'DONE'` | 조회 시 계산 | FR-008 |
 | BR-07 | 칼럼 내 순서 변경 시 해당 칼럼의 `position` 재계산 | 드래그앤드롭 | FR-007 |
 | BR-08 | Done 칼럼에는 `completed_at` 기준 24시간 이내 티켓만 표시 | 보드 조회 | FR-005 |
@@ -372,11 +372,12 @@ BACKLOG → TODO            started_at = 2026-09-02 15:00   ← 초기화됐으�
 | IN_PROGRESS → TODO | 유지 | - | `PATCH /api/tickets/reorder` |
 | TODO → BACKLOG | `NULL` | - | `PATCH /api/tickets/reorder` |
 | 임의 칼럼 → DONE | 유지 | `now()` | `PATCH /api/tickets/:id/complete` |
-| DONE → 임의 칼럼 | 유지 | `NULL` | `PATCH /api/tickets/:id/complete` |
+| DONE → 임의 칼럼 | 유지 | `NULL` | `PATCH /api/tickets/reorder` |
 | 같은 칼럼 내 순서 변경 | 유지 | 유지 | `PATCH /api/tickets/reorder` |
 
-> Done으로의 이동은 `reorder`가 아닌 `/complete` 엔드포인트를 사용한다 (FR-007 단서 조항).
-> `reorder`가 허용하는 `status`는 `BACKLOG`, `TODO`, `IN_PROGRESS` 세 가지다.
+> **방향에 따라 엔드포인트가 다르다.** Done으로 **들어가는** 이동은 `/complete`가,
+> Done에서 **나오는** 이동은 `reorder`가 담당한다. `reorder`가 허용하는 이동 *대상*은
+> `BACKLOG`, `TODO`, `IN_PROGRESS` 세 가지이며, DONE에서 나올 때 `completedAt`을 초기화한다.
 
 ### 6.4 파생 필드 — `isOverdue` (BR-06)
 
