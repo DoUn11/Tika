@@ -1,13 +1,14 @@
-import { eq, min } from 'drizzle-orm';
+import { and, asc, eq, gte, min, ne, or } from 'drizzle-orm';
 import { getDb } from '@/server/db';
 import { tickets, type TicketRow } from '@/server/db/schema';
 import {
+  DONE_VISIBLE_HOURS,
   POSITION_GAP,
   TICKET_STATUS,
   type TicketPriority,
   type TicketStatus,
 } from '@/shared/constants/ticket';
-import type { Ticket } from '@/shared/types/ticket';
+import type { BoardData, Ticket } from '@/shared/types/ticket';
 import { isPastDue } from '@/shared/utils/date';
 import type { CreateTicketInput } from '@/shared/validations/ticketSchema';
 
@@ -65,6 +66,42 @@ export const createTicket = async (input: CreateTicketInput): Promise<Ticket> =>
     .returning();
 
   return toTicket(row!);
+};
+
+/**
+ * FR-002 보드 조회. 4개 칼럼별로 그룹화하여 반환한다.
+ *
+ * Done 칼럼은 completedAt 기준 24시간 이내 티켓만 포함한다 (FR-005).
+ * 24시간이 지난 티켓은 삭제되지 않고 보드에서만 감춰진다.
+ */
+export const getBoard = async (): Promise<BoardData> => {
+  const cutoff = new Date(Date.now() - DONE_VISIBLE_HOURS * 60 * 60 * 1000);
+
+  const rows = await getDb()
+    .select()
+    .from(tickets)
+    .where(
+      or(
+        ne(tickets.status, TICKET_STATUS.DONE),
+        and(eq(tickets.status, TICKET_STATUS.DONE), gte(tickets.completedAt, cutoff)),
+      ),
+    )
+    .orderBy(asc(tickets.position));
+
+  // 티켓이 없는 칼럼도 빈 배열로 존재해야 한다 (API_SPEC 2.2).
+  // BoardData가 Record<TicketStatus, Ticket[]>이므로 키가 빠지면 컴파일 에러가 난다.
+  const board: BoardData = {
+    [TICKET_STATUS.BACKLOG]: [],
+    [TICKET_STATUS.TODO]: [],
+    [TICKET_STATUS.IN_PROGRESS]: [],
+    [TICKET_STATUS.DONE]: [],
+  };
+
+  for (const row of rows) {
+    board[row.status as TicketStatus]?.push(toTicket(row));
+  }
+
+  return board;
 };
 
 export { toTicket };
