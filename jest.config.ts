@@ -17,6 +17,9 @@ const testPathIgnorePatterns = [
   '<rootDir>/__tests__/helpers/',
 ];
 
+/** 테스트 실행 전 .env.test 로드 (로컬 PostgreSQL) */
+const setupFiles = ['<rootDir>/jest.env.ts'];
+
 /** API·서비스 테스트 — Node 환경 (TEST_CASES.md 2.1) */
 const serverConfig: Config = {
   displayName: 'server',
@@ -27,6 +30,8 @@ const serverConfig: Config = {
   ],
   moduleNameMapper,
   testPathIgnorePatterns,
+  setupFiles,
+  setupFilesAfterEnv: ['<rootDir>/jest.teardown.ts'],
 };
 
 /** 컴포넌트·통합 테스트 — jsdom 환경 (TEST_CASES.md 2.1) */
@@ -39,6 +44,7 @@ const clientConfig: Config = {
   ],
   moduleNameMapper,
   testPathIgnorePatterns,
+  setupFiles,
   setupFilesAfterEnv: ['<rootDir>/jest.setup.ts'],
 };
 

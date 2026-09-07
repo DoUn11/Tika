@@ -28,3 +28,7 @@ coverage/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+.env*
+
+# 예시 파일은 값이 없으므로 추적한다
+!.env*.example
