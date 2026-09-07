@@ -33,3 +33,30 @@ export const createTicketSchema = z.object({
 });
 
 export type CreateTicketInput = z.infer<typeof createTicketSchema>;
+
+/**
+ * FR-004 티켓 수정 요청 검증. 부분 수정(PATCH)이다.
+ *
+ * 세 상태를 구분한다.
+ *   키 없음(undefined) → 기존 값 유지
+ *   null              → 값 삭제
+ *   값                → 갱신
+ *
+ * title은 NOT NULL 컬럼이므로 삭제할 수 없다. nullable을 붙이지 않는다.
+ * status·position·completedAt은 여기서 다루지 않으며(FR-005·FR-007),
+ * Zod가 정의되지 않은 키를 걸러내므로 전송되어도 무시된다.
+ */
+export const updateTicketSchema = z.object({
+  title: z
+    .string({ invalid_type_error: '제목을 입력해주세요' })
+    .trim()
+    .min(1, '제목을 입력해주세요')
+    .max(200, '제목은 200자 이내로 입력해주세요')
+    .optional(),
+  description: z.string().max(1000, '설명은 1000자 이내로 입력해주세요').nullable().optional(),
+  priority: priority.optional(),
+  plannedStartDate: dateString.nullable().optional(),
+  dueDate: dueDateString.nullable().optional(),
+});
+
+export type UpdateTicketInput = z.infer<typeof updateTicketSchema>;

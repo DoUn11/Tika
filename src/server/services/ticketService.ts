@@ -1,6 +1,6 @@
 import { and, asc, eq, gte, min, ne, or } from 'drizzle-orm';
 import { getDb } from '@/server/db';
-import { tickets, type TicketRow } from '@/server/db/schema';
+import { tickets, type NewTicketRow, type TicketRow } from '@/server/db/schema';
 import {
   DONE_VISIBLE_HOURS,
   POSITION_GAP,
@@ -10,7 +10,7 @@ import {
 } from '@/shared/constants/ticket';
 import type { BoardData, Ticket } from '@/shared/types/ticket';
 import { isPastDue } from '@/shared/utils/date';
-import type { CreateTicketInput } from '@/shared/validations/ticketSchema';
+import type { CreateTicketInput, UpdateTicketInput } from '@/shared/validations/ticketSchema';
 
 /** dueDate가 지났고 아직 완료되지 않았으면 초과다 (FR-008). 당일은 초과가 아니다. */
 const computeIsOverdue = (row: TicketRow): boolean => {
@@ -117,5 +117,34 @@ export const getBoard = async (): Promise<BoardData> => {
  */
 export const getTicketById = async (id: number): Promise<Ticket | null> => {
   const [row] = await getDb().select().from(tickets).where(eq(tickets.id, id)).limit(1);
+  return row ? toTicket(row) : null;
+};
+
+/**
+ * FR-004 티켓 수정. 전송된 필드만 갱신한다.
+ *
+ * undefined(키 없음)와 null(삭제)을 구분해야 하므로 스프레드로 합치지 않고
+ * 필드별로 undefined 여부를 확인한다. 스키마가 이미 셋을 구분해 통과시킨다.
+ *
+ * 존재하지 않는 ID면 null을 반환하며, 호출부가 404로 변환한다.
+ */
+export const updateTicket = async (
+  id: number,
+  input: UpdateTicketInput,
+): Promise<Ticket | null> => {
+  const updates: Partial<NewTicketRow> = { updatedAt: new Date() };
+
+  if (input.title !== undefined) updates.title = input.title;
+  if (input.description !== undefined) updates.description = input.description;
+  if (input.priority !== undefined) updates.priority = input.priority;
+  if (input.plannedStartDate !== undefined) updates.plannedStartDate = input.plannedStartDate;
+  if (input.dueDate !== undefined) updates.dueDate = input.dueDate;
+
+  const [row] = await getDb()
+    .update(tickets)
+    .set(updates)
+    .where(eq(tickets.id, id))
+    .returning();
+
   return row ? toTicket(row) : null;
 };
