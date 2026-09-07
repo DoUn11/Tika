@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { getBoard, reorder } from '@/client/api/ticketApi';
+import { complete, getBoard, reorder } from '@/client/api/ticketApi';
 import { COLUMN_ORDER, TICKET_STATUS, type TicketStatus } from '@/shared/constants/ticket';
 import type { BoardData } from '@/shared/types/ticket';
 
@@ -44,8 +44,7 @@ const toError = (cause: unknown): Error =>
 /**
  * 보드 상태와 API 호출을 관리한다 (COMPONENT_SPEC 6장).
  *
- * move의 complete/reorder 분기(6.2)와 실패 시 롤백(6.5)은 아직 없다.
- * 각각 TC-INT-002·TC-INT-003이 이끈다.
+ * 실패 시 롤백(6.5)은 아직 없다. TC-INT-003이 이끈다.
  */
 export const useTickets = () => {
   const [board, setBoard] = useState<BoardData>(createEmptyBoard);
@@ -68,13 +67,49 @@ export const useTickets = () => {
     void refetch();
   }, [refetch]);
 
-  const move = useCallback(
+  /**
+   * FR-007 상태·순서 변경. 응답이 BoardData 전체라 그대로 확정한다 (API_SPEC 13.2).
+   */
+  const reorderTicket = useCallback(
     async (id: number, status: TicketStatus, position: number): Promise<void> => {
-      setBoard((previous) => applyMove(previous, id, status, position));
       setBoard(await reorder(id, status, position));
     },
     [],
   );
 
-  return { board, isLoading, error, move, refetch };
+  /**
+   * FR-005 티켓 완료. 응답이 Ticket 하나뿐이라 보드를 다시 읽어 확정한다.
+   */
+  const completeTicket = useCallback(
+    async (id: number): Promise<void> => {
+      await complete(id);
+      await refetch();
+    },
+    [refetch],
+  );
+
+  /**
+   * 드래그앤드롭의 유일한 진입점 (COMPONENT_SPEC 6.2).
+   *
+   * **이동 대상만 본다.** DONE으로 들어가는 것은 completedAt 기록이 함께
+   * 일어나야 해서 /complete가 맡고, 그 밖은 전부 /reorder다. DONE에서
+   * 빠져나오는 이동도 대상이 DONE이 아니므로 reorder이며, completedAt
+   * 초기화는 서버가 한다 (API_SPEC 13.1).
+   *
+   * 현재 상태를 조회할 필요가 없어 분기가 한 줄로 줄었다.
+   */
+  const move = useCallback(
+    async (id: number, status: TicketStatus, position: number): Promise<void> => {
+      setBoard((previous) => applyMove(previous, id, status, position));
+
+      if (status === TICKET_STATUS.DONE) {
+        await completeTicket(id);
+      } else {
+        await reorderTicket(id, status, position);
+      }
+    },
+    [completeTicket, reorderTicket],
+  );
+
+  return { board, isLoading, error, move, reorder: reorderTicket, complete: completeTicket, refetch };
 };
