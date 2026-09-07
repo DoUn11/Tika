@@ -1,9 +1,10 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { complete, getBoard, reorder } from '@/client/api/ticketApi';
+import { complete, getBoard, remove, reorder, update } from '@/client/api/ticketApi';
 import { COLUMN_ORDER, TICKET_STATUS, type TicketStatus } from '@/shared/constants/ticket';
 import type { BoardData } from '@/shared/types/ticket';
+import type { UpdateTicketInput } from '@/shared/validations/ticketSchema';
 
 /** 4개 키가 항상 존재해야 한다 (API_SPEC 2.2) */
 export const createEmptyBoard = (): BoardData => ({
@@ -68,6 +69,28 @@ export const useTickets = () => {
   }, [refetch]);
 
   /**
+   * FR-004 티켓 수정 · FR-006 티켓 삭제.
+   *
+   * 낙관적 업데이트를 쓰지 않는다. 카드 위치가 바뀌지 않아 즉시 반영의
+   * 이득이 작고, 응답 뒤 보드를 다시 읽는 편이 단순하다 (COMPONENT_SPEC 6.5).
+   */
+  const updateTicket = useCallback(
+    async (id: number, input: UpdateTicketInput): Promise<void> => {
+      await update(id, input);
+      await refetch();
+    },
+    [refetch],
+  );
+
+  const removeTicket = useCallback(
+    async (id: number): Promise<void> => {
+      await remove(id);
+      await refetch();
+    },
+    [refetch],
+  );
+
+  /**
    * FR-007 상태·순서 변경. 응답이 BoardData 전체라 그대로 확정한다 (API_SPEC 13.2).
    */
   const reorderTicket = useCallback(
@@ -121,5 +144,15 @@ export const useTickets = () => {
     [board, completeTicket, reorderTicket],
   );
 
-  return { board, isLoading, error, move, reorder: reorderTicket, complete: completeTicket, refetch };
+  return {
+    board,
+    isLoading,
+    error,
+    move,
+    update: updateTicket,
+    remove: removeTicket,
+    reorder: reorderTicket,
+    complete: completeTicket,
+    refetch,
+  };
 };
