@@ -15,8 +15,8 @@
 
 | 사용자 스토리 | 관련 FR | API 테스트 | 컴포넌트 테스트 | 통합 테스트 |
 |--------------|---------|-----------|----------------|------------|
-| US-001: 새 할 일 등록 | FR-001 | TC-API-001 | TC-COMP-004 | - |
-| US-002: 상세 정보 설정 | FR-001 | TC-API-001 | TC-COMP-004 | - |
+| US-001: 새 할 일 등록 | FR-001 | TC-API-001 | TC-COMP-004 | TC-INT-006 |
+| US-002: 상세 정보 설정 | FR-001 | TC-API-001 | TC-COMP-004 | TC-INT-006 |
 | US-003: 칸반 보드 현황 파악 | FR-002, FR-008 | TC-API-002, TC-API-008 | TC-COMP-002, TC-COMP-003 | - |
 | US-004: 마감 초과 인지 | FR-008 | TC-API-008 | TC-COMP-001 | - |
 | US-005: 드래그앤드롭 상태 변경 | FR-007 | TC-API-007 | - | TC-INT-001, TC-INT-002, TC-INT-003 |
@@ -47,12 +47,13 @@
 | TC-INT-003 | 이동 실패 → 롤백 | FR-007 | US-005 |
 | TC-INT-004 | 완료는 삭제가 아니다 | FR-005 | US-006 |
 | TC-INT-005 | 모달에서 영구 삭제 | FR-006 | US-008 |
+| TC-INT-006 | 티켓 생성 → 보드 반영 | FR-001 | US-001, US-002 |
 
 ### 1.3 커버리지 확인
 
 | FR | 테스트 | 상태 |
 |----|--------|------|
-| FR-001 티켓 생성 | TC-API-001, TC-COMP-004 | ✓ |
+| FR-001 티켓 생성 | TC-API-001, TC-COMP-004, TC-INT-006 | ✓ |
 | FR-002 목록 조회 | TC-API-002, TC-COMP-002, TC-COMP-003 | ✓ |
 | FR-003 상세 조회 | TC-API-003, TC-COMP-005 | ✓ |
 | FR-004 티켓 수정 | TC-API-004, TC-COMP-005 | ✓ |
@@ -729,7 +730,7 @@ it('확인을 누르면 삭제가 요청된다', async () => {
 
 여러 계층을 가로지르는 흐름을 검증한다. API는 목킹하고 UI부터 Hook까지를 실제로 동작시킨다.
 
-### 5.1 다섯 개로 나눈 이유
+### 5.1 여섯 개로 나눈 이유
 
 통합 테스트는 앱 전체를 세워야 하므로, 한 케이스에 여러 관심사를 담으면
 **첫 구현에서 만들어야 할 것이 한꺼번에 몰린다.** 드래그 배선, `useTickets`의
@@ -746,6 +747,7 @@ it('확인을 누르면 삭제가 요청된다', async () => {
 | TC-INT-003 | 실패 시 스냅샷 롤백, 에러 노출, 드래그 취소 | 001·002 |
 | TC-INT-004 | 보드 ↔ `TicketModal` 연결 | 001~003 |
 | TC-INT-005 | `useTickets.remove()`와 삭제 후 보드 갱신 | 001~004 |
+| TC-INT-006 | `Header`·`TicketForm` 배선, `useTickets.create()` | 001~005 |
 
 **TC-INT-001이 가장 무겁다.** 앱이 한 번은 통째로 서야 하므로 피할 수 없다.
 대신 001은 "옮기면 옮겨진다"까지만 보고, 분기·실패·모달은 뒤로 미룬다.
@@ -928,6 +930,44 @@ it('완료된 카드를 삭제하면 보드에서 완전히 사라진다', async
   expect(mockApi.remove).toHaveBeenCalledWith(1);
   await waitFor(() => {
     expect(screen.queryByText('보드 구현')).not.toBeInTheDocument();
+  });
+});
+```
+
+---
+
+### TC-INT-006 · 티켓 생성 → 보드 반영 (FR-001, US-001·US-002)
+
+명세 7.2의 흐름이다. 헤더에서 폼을 열고, 만들고, 보드에 나타나는 데까지 이어진다.
+
+| ID | 시나리오 | 기대 |
+|----|----------|------|
+| 006-N1 | "새 티켓" 클릭 | 생성 폼이 열린다 |
+| 006-N2 | 제목만 입력하고 생성 | `create`가 호출되고 폼이 닫힌다 |
+| 006-N3 | 생성 후 | 보드를 다시 조회해 Backlog에 카드가 나타난다 |
+| 006-N4 | 폼에서 취소 | 폼이 닫히고 `create`는 호출되지 않는다 |
+| 006-E1 | 제목 없이 제출 | 안내가 보이고 폼이 열린 채로 남는다 |
+| 006-E2 | `create`가 실패 | 실패가 안내되고 카드가 생기지 않는다 |
+
+> **이 케이스는 뒤늦게 추가했다.** 원래 통합 테스트가 드래그와 삭제만 다루어
+> 생성 흐름을 이끄는 테스트가 없었고, 그 결과 `Header`와 `TicketForm`이
+> 만들어져 있는데도 앱에 배선되지 않았다. **티켓을 만들 수 없는 칸반 보드**가
+> 되어 있었다. 컴포넌트 테스트가 모두 통과해도 배선이 빠지면 앱은 동작하지
+> 않는다는 것이 통합 테스트가 필요한 이유다 (2장 계층 구분).
+
+```typescript
+it('헤더에서 티켓을 만들면 보드에 나타난다', async () => {
+  mockApi.create.mockResolvedValue(ticket({ id: 1, title: 'PRD 초안' }));
+  renderApp();
+
+  await userEvent.click(await screen.findByRole('button', { name: '새 티켓' }));
+  await userEvent.type(screen.getByLabelText('제목'), 'PRD 초안');
+
+  mockApi.getBoard.mockResolvedValue(boardWith({ BACKLOG: [ticket({ id: 1, title: 'PRD 초안' })] }));
+  await userEvent.click(screen.getByRole('button', { name: '생성' }));
+
+  await waitFor(() => {
+    expect(within(columnOf('BACKLOG')).getByText('PRD 초안')).toBeInTheDocument();
   });
 });
 ```
