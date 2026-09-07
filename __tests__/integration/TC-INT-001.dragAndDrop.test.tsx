@@ -20,15 +20,21 @@ import {
   moveCardDown,
   renderApp,
 } from '../helpers/app';
-import { boardWith, emptyBoard, ticket } from '../helpers/factories';
+import { boardWith, ticket } from '../helpers/factories';
 
 jest.mock('@/client/api/ticketApi');
 
 const mockApi = jest.mocked(ticketApi);
 
+/**
+ * 기본은 "응답이 아직 오지 않은 상태"다.
+ *
+ * 응답을 곧바로 돌려주면 그 보드가 화면을 덮어써서, 낙관적 업데이트로 무엇이
+ * 보이는지를 볼 수 없다. 확정 동작은 001-N6이 따로 본다.
+ */
 beforeEach(() => {
   jest.clearAllMocks();
-  mockApi.reorder.mockResolvedValue(emptyBoard());
+  mockApi.reorder.mockReturnValue(new Promise<BoardData>(() => {}));
 });
 
 describe('TC-INT-001: 드래그앤드롭 → 이동 반영', () => {
@@ -103,7 +109,11 @@ describe('TC-INT-001: 드래그앤드롭 → 이동 반영', () => {
 
       expect(within(columnOf(TICKET_STATUS.TODO)).getByText('PRD 초안')).toBeInTheDocument();
 
-      settle(emptyBoard());
+      settle(
+        boardWith({
+          [TICKET_STATUS.TODO]: [ticket({ id: 1, title: 'PRD 초안', status: TICKET_STATUS.TODO })],
+        }),
+      );
     });
   });
 
