@@ -827,15 +827,30 @@ it('완료된 카드를 삭제하면 보드에서 완전히 사라진다', async
 
 | 유틸 | 용도 |
 |------|------|
-| `resetDatabase()` | 각 테스트 전 `tickets` 테이블 초기화 |
-| `seedTicket(overrides)` | 테스트용 티켓 생성. 기본값 + 부분 덮어쓰기 |
-| `ticket(overrides)` | 컴포넌트용 `Ticket` 객체 팩토리 (DB 미사용) |
-| `jsonRequest(body)` | Route Handler에 넘길 `Request` 생성 |
-| `renderApp(board)` | 통합 테스트용 전체 앱 렌더링 |
-| `dragCardToColumn(title, column)` | 키보드 센서 기반 드래그 헬퍼 |
-| `daysAgo(n)` / `hoursAgo(n)` / `today()` | 날짜 헬퍼 |
+| 유틸 | 용도 | 상태 |
+|------|------|------|
+| `resetDatabase()` | 각 테스트 전 `tickets` 테이블 초기화 | 구현됨 |
+| `seedTicket(overrides)` | 테스트용 티켓 생성. 기본값 + 부분 덮어쓰기 | 구현됨 |
+| `jsonRequest(body)` | Route Handler에 넘길 `Request` 생성 | 구현됨 |
+| `daysAgo(n)` / `daysLater(n)` / `hoursAgo(n)` / `today()` | 날짜 헬퍼 | 구현됨 |
+| `closePool()` | 커넥션 풀 종료 | 구현됨 |
+| `ticket(overrides)` | 컴포넌트용 `Ticket` 객체 팩토리 (DB 미사용) | 컴포넌트 테스트 시 |
+| `renderApp(board)` | 통합 테스트용 전체 앱 렌더링 | 통합 테스트 시 |
+| `dragCardToColumn(title, column)` | 키보드 센서 기반 드래그 헬퍼 | 통합 테스트 시 |
 
-### 6.2 날짜 고정
+### 6.2 테스트 DB
+
+API·서비스 테스트는 **로컬 PostgreSQL**에 붙는다. 접속 정보는 `.env.test`에 둔다 (TRD 5.2).
+
+```
+POSTGRES_URL=postgresql://tika:<password>@localhost:5432/tika_test
+```
+
+- `resetDatabase()`가 매 테스트 전 `tickets` 테이블을 비우므로 **반드시 테스트 전용 DB여야 한다**
+- 커넥션 풀은 `jest.teardown.ts`가 `afterAll`에서 닫는다. 닫지 않으면 Jest가 종료되지 않는다
+- 실행 환경은 `jest.config.ts`가 `projects`로 분리한다 — `api`·`server`는 node, `client`·`integration`은 jsdom
+
+### 6.3 날짜 고정
 
 `isOverdue`와 24시간 필터는 현재 시각에 의존하므로, 시간에 민감한 테스트는 시각을 고정한다.
 
@@ -848,7 +863,7 @@ afterEach(() => {
 });
 ```
 
-### 6.3 실행
+### 6.4 실행
 
 ```bash
 npm test                    # 전체
@@ -857,7 +872,7 @@ npm test -- --coverage      # 커버리지
 npm test TC-API-001         # 특정 케이스
 ```
 
-### 6.4 커버리지 기준
+### 6.5 커버리지 기준
 
 | 대상 | 기준 |
 |------|------|

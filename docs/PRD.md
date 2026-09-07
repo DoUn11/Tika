@@ -276,7 +276,8 @@ CLAUDE.md에 정의된 스택과 선정 이유다.
 | 구분 | 기술 | 선정 이유 |
 |------|------|-----------|
 | ORM | **Drizzle ORM** | 스키마 정의에서 TypeScript 타입이 직접 추론되어 DB와 애플리케이션 타입이 어긋나지 않는다. 드래그앤드롭의 `position` 재계산에 필요한 트랜잭션을 지원한다 |
-| DB | **Vercel Postgres (Neon)** | 서버리스 환경에 최적화된 커넥션 관리를 제공하여 Vercel Function 환경에서 커넥션 고갈이 발생하지 않는다. 관계형 DB이므로 `position` 기반 정렬과 트랜잭션 처리에 적합하다 |
+| DB 드라이버 | **node-postgres (`pg`)** | 표준 접속 문자열을 쓰므로 로컬 PostgreSQL과 Vercel Postgres에 같은 코드로 붙는다. 테스트는 빠른 로컬 DB에서 돌리고 배포만 원격을 쓰면서도 환경 분기가 생기지 않는다 |
+| DB | **Vercel Postgres (Neon)** — 배포<br>**PostgreSQL** — 로컬·테스트 | 서버리스 환경에 최적화된 커넥션 관리를 제공하여 Vercel Function 환경에서 커넥션 고갈이 발생하지 않는다. 관계형 DB이므로 `position` 기반 정렬과 트랜잭션 처리에 적합하다 |
 | Validation | **Zod** | 하나의 스키마를 `src/shared/`에 두고 프론트엔드 폼 검증과 백엔드 요청 검증에 함께 사용한다(NFR-004 이중 검증). 스키마에서 타입을 추론할 수 있어 타입과 검증 규칙이 분리되지 않는다 |
 
 ### 7.4 품질 / 배포

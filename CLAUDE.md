@@ -52,10 +52,14 @@ PATCH  /api/tickets/reorder      FR-007 상태·순서 변경
 - Styling: Tailwind CSS 4
 - Drag & Drop: @dnd-kit/core + @dnd-kit/sortable
 - ORM: Drizzle ORM
-- DB: Vercel Postgres (Neon)
+- DB 드라이버: node-postgres (pg) — 로컬·배포 공통
+- DB: 로컬/테스트는 PostgreSQL, 배포는 Vercel Postgres (Neon)
 - Validation: Zod
 - Testing: Jest + React Testing Library
 - Deployment: Vercel
+
+> @vercel/postgres는 Neon 전용이라 로컬 PostgreSQL에 붙지 못한다. pg로 통일한다 (TRD 2.5).
+> 테스트는 .env.test(로컬 DB), 개발 서버는 .env.local(vercel env pull)을 쓴다.
 
 ## 프로젝트 문서 (반드시 참조)
 - 제품 요구사항: /docs/PRD.md

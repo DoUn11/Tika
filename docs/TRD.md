@@ -80,13 +80,13 @@ Next.js 애플리케이션 하나에 프론트엔드와 백엔드(Route Handlers
  ┌──────────────────────────────────────────────────────────────┐
  │  src/server/db/                              ③ Drizzle ORM   │
  │                                                              │
- │   schema.ts (테이블 정의) / index.ts (커넥션)                 │
+ │   schema.ts (테이블 정의) / index.ts (커넥션, 지연 생성)      │
  │   ─────────────────────────────────────────                  │
- │   타입 안전 쿼리 빌더 → SQL 생성                              │
+ │   타입 안전 쿼리 빌더 → SQL 생성 (node-postgres)              │
  └───────────────────────────────┬──────────────────────────────┘
                                  ▼
  ┌──────────────────────────────────────────────────────────────┐
- │  Vercel Postgres (Neon)                      ④ Database      │
+ │  PostgreSQL (로컬) / Vercel Postgres (배포)   ④ Database      │
  │   tickets 테이블                                              │
  └──────────────────────────────────────────────────────────────┘
 
@@ -129,7 +129,7 @@ tika/
 │   │   ├── services/
 │   │   │   └── ticketService.ts      # 비즈니스 로직
 │   │   ├── db/
-│   │   │   ├── index.ts              # Drizzle 커넥션
+│   │   │   ├── index.ts              # Drizzle 커넥션 (node-postgres, 지연 생성)
 │   │   │   └── schema.ts             # 테이블 정의
 │   │   └── middleware/
 │   │       └── errorHandler.ts       # 에러 → { error: { code, message } } 변환
@@ -155,11 +155,26 @@ tika/
 │           └── ticket.ts             # TICKET_STATUS, TICKET_PRIORITY
 │
 ├── __tests__/                        # Jest + RTL
+│   ├── api/                          # Route Handler 테스트 (node 환경)
+│   ├── server/                       # 서비스 유닛 테스트 (node 환경)
+│   ├── client/                       # 컴포넌트 테스트 (jsdom 환경)
+│   ├── integration/                  # 통합 테스트 (jsdom 환경)
+│   └── helpers/                      # 테스트 유틸 (테스트 파일 아님)
+│
 ├── drizzle/                          # 마이그레이션 산출물
 ├── drizzle.config.ts
+├── jest.config.ts                    # projects로 node/jsdom 환경 분리
+├── jest.env.ts                       # .env.test 로드 (setupFiles)
+├── jest.teardown.ts                  # 커넥션 풀 종료 (setupFilesAfterEnv)
+├── .env.test                         # 로컬 테스트 DB (git 제외)
 ├── .env.local                        # vercel env pull 결과 (git 제외)
 └── docs/
 ```
+
+> **Jest 설정 주의**: `next/jest`는 자신이 감싼 설정에만 SWC 트랜스폼을 주입한다.
+> `projects` 배열에 설정 객체를 그대로 넣으면 각 project가 트랜스폼 없이 실행되어
+> TypeScript 테스트에서 `Cannot use import statement outside a module`이 발생한다.
+> project별로 `createJestConfig`를 각각 적용한 뒤 합쳐야 한다.
 
 > **라우트 우선순위 주의**: Next.js App Router는 정적 세그먼트를 동적 세그먼트보다 먼저 매칭한다.
 > 따라서 `app/api/tickets/reorder/route.ts`가 `app/api/tickets/[id]/route.ts`보다 우선 해석되어,
@@ -179,8 +194,10 @@ tika/
 | UI | React | 19.x |
 | Styling | Tailwind CSS | 4.x |
 | Drag & Drop | @dnd-kit/core, @dnd-kit/sortable | 6.x / 8.x |
-| ORM | Drizzle ORM (+ drizzle-kit) | 0.3x |
-| DB | Vercel Postgres (Neon) | PostgreSQL 15+ |
+| ORM | Drizzle ORM (+ drizzle-kit) | 0.4x / 0.31x |
+| DB 드라이버 | node-postgres (`pg`) | 8.x |
+| DB (배포) | Vercel Postgres (Neon) | PostgreSQL 15+ |
+| DB (로컬·테스트) | PostgreSQL | 18.x |
 | Validation | Zod | 3.x |
 | Test | Jest, React Testing Library | 29.x / 16.x |
 | Lint / Format | ESLint, Prettier | 9.x / 3.x |
@@ -225,7 +242,7 @@ export const runtime = 'nodejs'; // 명시적으로 선언
 
 **선정 이유**
 - **코드 생성 단계가 없다.** 스키마를 TypeScript로 정의하면 타입이 곧바로 추론된다
-- Vercel Postgres를 공식 지원한다 (`drizzle-orm/vercel-postgres`)
+- 여러 Postgres 드라이버를 지원한다. 본 프로젝트는 `drizzle-orm/node-postgres`를 쓴다 (2.5 참조)
 - 번들 크기가 작아 서버리스 콜드 스타트에 유리하다
 - SQL에 가까운 API로 `position` 재계산 같은 쿼리를 의도대로 표현할 수 있다
 
@@ -249,14 +266,40 @@ Prisma의 성숙한 마이그레이션은 장점이지만, 테이블 1개 규모
 |-----------|-------------------|
 | **TypeORM** | 데코레이터·`experimentalDecorators` 의존. 타입 추론이 Drizzle보다 약하다 |
 | **Raw SQL (pg)** | 타입 안전성이 없다. CLAUDE.md가 raw SQL을 금지한다 |
-| **Kysely** | 타입 안전성은 유사하나 Vercel Postgres 공식 통합과 마이그레이션 도구가 Drizzle만큼 정비되어 있지 않다 |
+| **Kysely** | 타입 안전성은 유사하나 마이그레이션 도구가 Drizzle만큼 정비되어 있지 않다 |
 
-### 2.5 Database — Vercel Postgres (Neon 기반)
+### 2.5 Database — Postgres (로컬) / Vercel Postgres (배포)
 
-**선정 이유**
-- **서버리스 커넥션 풀을 자동 관리한다.** Vercel Function이 요청마다 생성/소멸되어도 커넥션이 고갈되지 않는다
-- Vercel 프로젝트에 연결하면 환경 변수(`POSTGRES_URL` 등)가 자동 주입된다
-- 관계형 DB이므로 `position` 기반 정렬, 트랜잭션, 인덱스를 그대로 활용한다
+**두 환경, 하나의 드라이버**
+
+| 환경 | DB | 용도 |
+|------|-----|------|
+| 로컬 | PostgreSQL 18 (`tika_test`) | `npm test` 실행, 개발 |
+| 배포 | Vercel Postgres (Neon) | 프로덕션·프리뷰 |
+
+둘 다 **표준 접속 문자열**을 쓰므로 `node-postgres`(`pg`) 드라이버 하나로 양쪽에 붙는다.
+환경에 따라 코드가 갈리지 않으며, 배포 시 `POSTGRES_URL`만 바뀐다.
+
+```typescript
+// src/server/db/index.ts — 환경 분기 없음
+const pool = new Pool({ connectionString: process.env.POSTGRES_URL });
+export const db = drizzle(pool, { schema });
+```
+
+> **연결은 지연 생성한다.** 모듈을 불러오는 것만으로 커넥션 설정을 요구하면
+> `next build`가 Route Handler를 수집하는 단계에서 실패한다. 빌드에 DB 설정이 필요해선 안 된다.
+
+**드라이버를 `@vercel/postgres`가 아닌 `pg`로 정한 이유**
+
+`@vercel/postgres`는 Neon의 serverless 프로토콜(HTTP/WebSocket) 전용이라
+로컬 PostgreSQL(`localhost:5432`)에 접속하지 못한다.
+테스트를 로컬 DB에서 빠르게 돌리려면 표준 TCP 드라이버가 필요하다.
+
+| 항목 | `pg` (채택) | `@vercel/postgres` |
+|------|-------------|--------------------|
+| 로컬 Postgres | 접속 가능 | **불가** |
+| Neon | 접속 가능 | 가능 |
+| 환경별 코드 분기 | 불필요 | 테스트용 별도 드라이버 필요 |
 
 **서버리스 커넥션 문제와 해결**
 
@@ -264,6 +307,9 @@ Prisma의 성숙한 마이그레이션은 장점이지만, 테이블 1개 규모
 일반 Postgres:  Function 100개 동시 실행 → 커넥션 100개 요청 → 상한 초과 → 실패
 Neon:           Function → Connection Pooler(PgBouncer) → 소수의 물리 커넥션 재사용
 ```
+
+Neon은 풀링 엔드포인트를 제공하므로, `pg`를 쓰더라도 `POSTGRES_URL`이 풀러를 가리키면
+서버리스 커넥션 고갈이 발생하지 않는다.
 
 **대안 비교**
 
@@ -369,7 +415,7 @@ export type CreateTicketInput = z.infer<typeof createTicketSchema>;
  [Drizzle]                   ③ ORM
       │  SELECT ... FROM tickets ORDER BY position ASC
       ▼
- [Vercel Postgres]           ④ DB
+ [PostgreSQL]                ④ DB
       │
       ▼  BoardData
  200 OK → 컴포넌트 렌더링
@@ -570,48 +616,73 @@ export async function POST(request: Request) {
 # 1. 의존성 설치
 npm install
 
-# 2. Vercel 프로젝트 연결
+# 2. 로컬 테스트 DB 준비 (테스트 실행에 필요)
+psql -h localhost -U postgres -c "CREATE ROLE tika LOGIN PASSWORD '<password>';"
+psql -h localhost -U postgres -c "CREATE DATABASE tika_test OWNER tika;"
+psql -h localhost -U postgres -d tika_test -c "ALTER SCHEMA public OWNER TO tika;"
+
+cp .env.test.example .env.test    # <password>를 실제 값으로 교체
+
+# 3. 스키마를 DB에 반영
+npx drizzle-kit generate          # 마이그레이션 파일 생성
+npx drizzle-kit migrate           # 마이그레이션 적용
+
+# 4. 테스트
+npm test
+
+# 5. (배포용) Vercel 연결 — 로컬 개발만 할 때는 불필요
 npx vercel link
-
-# 3. 환경 변수 가져오기 → .env.local 생성
 npx vercel env pull .env.local
-
-# 4. 스키마를 DB에 반영
-npx drizzle-kit push        # 개발 중 빠른 반영
-# 또는
-npx drizzle-kit generate    # 마이그레이션 파일 생성
-npx drizzle-kit migrate     # 마이그레이션 적용
-
-# 5. 개발 서버
 npm run dev
 ```
 
+> **3번의 `ALTER SCHEMA`가 필요한 이유**: PostgreSQL 15부터 `public` 스키마의 `CREATE` 권한이
+> 기본 회수되어, DB 소유자여도 마이그레이션에서 테이블 생성이 실패할 수 있다.
+
 ### 5.2 환경 변수
 
-`vercel env pull`로 받아오며, **`.env.local`은 git에 커밋하지 않는다.**
+용도에 따라 파일을 나눈다. **둘 다 git에 커밋하지 않는다.**
+
+| 파일 | 대상 | 출처 |
+|------|------|------|
+| `.env.test` | `npm test` — 로컬 PostgreSQL | 직접 작성 (`.env.test.example` 참고) |
+| `.env.local` | `npm run dev` — 배포 DB | `vercel env pull` |
 
 | 변수 | 용도 |
 |------|------|
 | `POSTGRES_URL` | 커넥션 풀링 연결 문자열 (애플리케이션 런타임) |
 | `POSTGRES_URL_NON_POOLING` | 직접 연결 (마이그레이션 실행 시) |
-| `POSTGRES_PRISMA_URL` | Vercel이 함께 주입 (본 프로젝트는 미사용) |
 
 > 마이그레이션은 커넥션 풀러를 우회해야 하므로 `POSTGRES_URL_NON_POOLING`을 사용한다.
+> 로컬 PostgreSQL에는 풀러가 없으므로 두 값이 같아도 된다.
+
+**주의**: `vercel env pull`은 `.env.local`을 **덮어쓴다.** 손으로 넣은 값은 사라진다.
+또한 이 명령은 `.gitignore`에 `.env*`를 자동 추가하는데, 이 규칙이 `.env.test.example` 같은
+예시 파일까지 가리므로 `!.env*.example` 예외가 필요하다.
 
 ### 5.3 테스트 — Jest + React Testing Library
 
-| 구분 | 대상 | 위치 |
-|------|------|------|
-| 유닛 | `ticketService` 비즈니스 로직 (position 재계산, 날짜 자동 설정) | `__tests__/server/` |
-| API | Route Handler 요청/응답, 상태 코드 | `__tests__/api/` |
-| 컴포넌트 | RTL 기반 렌더링·상호작용 | `__tests__/client/` |
-| 통합 | 드래그앤드롭 → 상태 변경 → 롤백 | `__tests__/integration/` |
+| 구분 | 대상 | 위치 | 환경 |
+|------|------|------|------|
+| 유닛 | `ticketService` 비즈니스 로직 (position 재계산, 날짜 자동 설정) | `__tests__/server/` | node |
+| API | Route Handler 요청/응답, 상태 코드 | `__tests__/api/` | node |
+| 컴포넌트 | RTL 기반 렌더링·상호작용 | `__tests__/client/` | jsdom |
+| 통합 | 드래그앤드롭 → 상태 변경 → 롤백 | `__tests__/integration/` | jsdom |
 
 ```bash
 npm test                # 전체 실행
 npm test -- --watch     # 감시 모드 (TDD Red→Green 사이클)
 npm test -- --coverage  # 커버리지
+npm test TC-API-001     # 단일 케이스 (파일명에 TC ID 포함)
 ```
+
+**테스트 DB**
+
+API·유닛 테스트는 `.env.test`의 로컬 PostgreSQL에 붙는다(5.2).
+각 테스트 전 `resetDatabase()`가 `tickets` 테이블을 비우므로 **테스트 전용 DB를 써야 한다.**
+
+커넥션 풀은 `jest.teardown.ts`가 `afterAll`에서 닫는다.
+닫지 않으면 열린 소켓 때문에 Jest 프로세스가 종료되지 않는다.
 
 **TDD 규칙 (CLAUDE.md)**
 - Red: 테스트만 작성한다. 구현 코드를 만들지 않는다
@@ -730,7 +801,7 @@ Vercel은 배포 이력을 보관하므로, 문제가 발생하면 Dashboard에�
 | Tailwind CSS 4 | 2.8 | ✓ |
 | @dnd-kit/core + sortable | 2.7 | ✓ |
 | Drizzle ORM | 2.4 | ✓ |
-| Vercel Postgres (Neon) | 2.5 | ✓ |
+| Vercel Postgres (Neon) | 2.5 | ✓ (배포 대상) |
 | Zod | 2.6 | ✓ |
 | Jest + RTL | 2.9, 5.3 | ✓ |
 | Vercel | 6장 | ✓ |
