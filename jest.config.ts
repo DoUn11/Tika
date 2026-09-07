@@ -11,41 +11,47 @@ const moduleNameMapper = {
 };
 
 /** 헬퍼는 테스트 파일이 아니라 유틸이므로 수집 대상에서 제외한다. */
-const testPathIgnorePatterns = ['<rootDir>/node_modules/', '<rootDir>/.next/', '<rootDir>/__tests__/helpers/'];
+const testPathIgnorePatterns = [
+  '<rootDir>/node_modules/',
+  '<rootDir>/.next/',
+  '<rootDir>/__tests__/helpers/',
+];
 
-/**
- * 계층별 실행 환경이 다르다 (TEST_CASES.md 2.1).
- * - server: API·서비스 테스트는 Node 환경
- * - client: 컴포넌트·통합 테스트는 jsdom 환경
- */
-const config: Config = {
-  coverageDirectory: '<rootDir>/coverage',
-  collectCoverageFrom: [
-    'app/**/*.{ts,tsx}',
-    'src/**/*.{ts,tsx}',
-    '!**/*.d.ts',
-    '!**/.gitkeep',
+/** API·서비스 테스트 — Node 환경 (TEST_CASES.md 2.1) */
+const serverConfig: Config = {
+  displayName: 'server',
+  testEnvironment: 'node',
+  testMatch: [
+    '<rootDir>/__tests__/api/**/*.test.ts',
+    '<rootDir>/__tests__/server/**/*.test.ts',
   ],
-  projects: [
-    {
-      displayName: 'server',
-      testEnvironment: 'node',
-      testMatch: ['<rootDir>/__tests__/api/**/*.test.ts', '<rootDir>/__tests__/server/**/*.test.ts'],
-      moduleNameMapper,
-      testPathIgnorePatterns,
-    },
-    {
-      displayName: 'client',
-      testEnvironment: 'jsdom',
-      testMatch: [
-        '<rootDir>/__tests__/client/**/*.test.{ts,tsx}',
-        '<rootDir>/__tests__/integration/**/*.test.{ts,tsx}',
-      ],
-      moduleNameMapper,
-      testPathIgnorePatterns,
-      setupFilesAfterEnv: ['<rootDir>/jest.setup.ts'],
-    },
-  ],
+  moduleNameMapper,
+  testPathIgnorePatterns,
 };
 
-export default createJestConfig(config);
+/** 컴포넌트·통합 테스트 — jsdom 환경 (TEST_CASES.md 2.1) */
+const clientConfig: Config = {
+  displayName: 'client',
+  testEnvironment: 'jsdom',
+  testMatch: [
+    '<rootDir>/__tests__/client/**/*.test.{ts,tsx}',
+    '<rootDir>/__tests__/integration/**/*.test.{ts,tsx}',
+  ],
+  moduleNameMapper,
+  testPathIgnorePatterns,
+  setupFilesAfterEnv: ['<rootDir>/jest.setup.ts'],
+};
+
+/**
+ * next/jest는 SWC 트랜스폼을 "자신이 감싼 설정"에만 주입한다.
+ * projects 배열 안에 그냥 넣으면 각 project가 트랜스폼 없이 실행되어
+ * TypeScript 파일에서 "Cannot use import statement outside a module"이 난다.
+ * 따라서 project별로 createJestConfig를 각각 적용한 뒤 합친다.
+ */
+const config = async (): Promise<Config> => ({
+  projects: [await createJestConfig(serverConfig)(), await createJestConfig(clientConfig)()],
+  coverageDirectory: '<rootDir>/coverage',
+  collectCoverageFrom: ['app/**/*.{ts,tsx}', 'src/**/*.{ts,tsx}', '!**/*.d.ts'],
+});
+
+export default config;
