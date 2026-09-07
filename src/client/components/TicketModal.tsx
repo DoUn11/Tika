@@ -5,7 +5,11 @@ import { getById } from '@/client/api/ticketApi';
 import { TICKET_PRIORITY, type TicketPriority } from '@/shared/constants/ticket';
 import type { Ticket } from '@/shared/types/ticket';
 import { updateTicketSchema, type UpdateTicketInput } from '@/shared/validations/ticketSchema';
+import { ConfirmDialog } from './ConfirmDialog';
 import { PriorityBadge } from './PriorityBadge';
+
+/** 삭제는 하드 삭제라 복구할 수 없다 (COMPONENT_SPEC 5.4) */
+const DELETE_CONFIRM_MESSAGE = '정말 삭제하시겠습니까?';
 
 type TicketModalProps = {
   /** null이면 닫힘. ID만 받고 상세는 모달이 직접 조회한다 */
@@ -92,16 +96,17 @@ const diff = (original: Ticket, form: FormValues): UpdateTicketInput => {
  *
  * 조회에 실패해도 닫지 않는다. 닫아 버리면 사용자가 왜 열리지 않았는지 알 수 없다.
  *
- * 삭제 버튼은 아직 아무 동작도 하지 않는다. 확인 절차를 건너뛸 수 없어야 하므로
- * (TC-COMP-006-E1) ConfirmDialog 배선은 TC-COMP-006이 이끈다.
+ * 삭제는 반드시 ConfirmDialog를 거친다. 하드 삭제라 되돌릴 수 없으므로
+ * "삭제" 버튼 자체는 onDelete를 호출하지 않는다 (FR-006).
  */
-export const TicketModal = ({ ticketId, onClose, onUpdate }: TicketModalProps) => {
+export const TicketModal = ({ ticketId, onClose, onUpdate, onDelete }: TicketModalProps) => {
   const [ticket, setTicket] = useState<Ticket | null>(null);
   const [isLoading, setIsLoading] = useState(ticketId !== null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [mode, setMode] = useState<'view' | 'edit'>('view');
   const [form, setForm] = useState<FormValues>(EMPTY_FORM);
   const [errors, setErrors] = useState<FieldErrors>({});
+  const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
 
   useEffect(() => {
     if (ticketId === null) return;
@@ -172,6 +177,12 @@ export const TicketModal = ({ ticketId, onClose, onUpdate }: TicketModalProps) =
     setMode('view');
   };
 
+  /** 확인을 받은 뒤에만 실제로 지운다 */
+  const confirmDelete = async (current: Ticket): Promise<void> => {
+    await onDelete(current.id);
+    onClose();
+  };
+
   const closeButton = (
     <button
       type="button"
@@ -179,6 +190,17 @@ export const TicketModal = ({ ticketId, onClose, onUpdate }: TicketModalProps) =
       className="rounded border border-slate-300 px-3 py-1 text-sm text-slate-700"
     >
       닫기
+    </button>
+  );
+
+  // 여기서는 확인창을 띄우기만 한다. 삭제 자체는 confirmDelete가 한다.
+  const deleteButton = (
+    <button
+      type="button"
+      onClick={() => setIsConfirmingDelete(true)}
+      className="rounded border border-red-300 px-3 py-1 text-sm text-red-600"
+    >
+      삭제
     </button>
   );
 
@@ -233,12 +255,7 @@ export const TicketModal = ({ ticketId, onClose, onUpdate }: TicketModalProps) =
           </dl>
 
           <div className="flex justify-between gap-2">
-            <button
-              type="button"
-              className="rounded border border-red-300 px-3 py-1 text-sm text-red-600"
-            >
-              삭제
-            </button>
+            {deleteButton}
             <div className="flex gap-2">
               <button
                 type="button"
@@ -350,12 +367,7 @@ export const TicketModal = ({ ticketId, onClose, onUpdate }: TicketModalProps) =
           </dl>
 
           <div className="flex justify-between gap-2">
-            <button
-              type="button"
-              className="rounded border border-red-300 px-3 py-1 text-sm text-red-600"
-            >
-              삭제
-            </button>
+            {deleteButton}
             <div className="flex gap-2">
               <button
                 type="button"
@@ -374,6 +386,15 @@ export const TicketModal = ({ ticketId, onClose, onUpdate }: TicketModalProps) =
             </div>
           </div>
         </>
+      )}
+
+      {ticket !== null && (
+        <ConfirmDialog
+          isOpen={isConfirmingDelete}
+          message={DELETE_CONFIRM_MESSAGE}
+          onConfirm={() => void confirmDelete(ticket)}
+          onCancel={() => setIsConfirmingDelete(false)}
+        />
       )}
     </div>
   );
