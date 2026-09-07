@@ -19,10 +19,10 @@
 | US-002: 상세 정보 설정 | FR-001 | TC-API-001 | TC-COMP-004 | - |
 | US-003: 칸반 보드 현황 파악 | FR-002, FR-008 | TC-API-002, TC-API-008 | TC-COMP-002, TC-COMP-003 | - |
 | US-004: 마감 초과 인지 | FR-008 | TC-API-008 | TC-COMP-001 | - |
-| US-005: 드래그앤드롭 상태 변경 | FR-007 | TC-API-007 | - | TC-INT-001 |
-| US-006: 할 일 완료 처리 | FR-005 | TC-API-005 | - | TC-INT-001, TC-INT-002 |
+| US-005: 드래그앤드롭 상태 변경 | FR-007 | TC-API-007 | - | TC-INT-001, TC-INT-002, TC-INT-003 |
+| US-006: 할 일 완료 처리 | FR-005 | TC-API-005 | - | TC-INT-002, TC-INT-004 |
 | US-007: 할 일 수정 | FR-003, FR-004 | TC-API-003, TC-API-004 | TC-COMP-005 | - |
-| US-008: 할 일 삭제 | FR-006 | TC-API-006 | TC-COMP-006 | TC-INT-002 |
+| US-008: 할 일 삭제 | FR-006 | TC-API-006 | TC-COMP-006 | TC-INT-005 |
 
 ### 1.2 테스트 → 요구사항 (역방향)
 
@@ -42,8 +42,11 @@
 | TC-COMP-004 | `TicketForm` — 티켓 생성 | FR-001 | US-001, US-002 |
 | TC-COMP-005 | `TicketModal` — 조회·수정 | FR-003, FR-004 | US-007 |
 | TC-COMP-006 | `TicketModal` + `ConfirmDialog` — 삭제 | FR-006 | US-008 |
-| TC-INT-001 | 드래그앤드롭 → 상태 변경 → 롤백 | FR-005, FR-007 | US-005, US-006 |
-| TC-INT-002 | 완료 처리 → 영구 삭제 | FR-005, FR-006 | US-006, US-008 |
+| TC-INT-001 | 드래그앤드롭 → 이동 반영 | FR-007 | US-005 |
+| TC-INT-002 | Done 드롭 → 완료 분기 | FR-005, FR-007 | US-005, US-006 |
+| TC-INT-003 | 이동 실패 → 롤백 | FR-007 | US-005 |
+| TC-INT-004 | 완료는 삭제가 아니다 | FR-005 | US-006 |
+| TC-INT-005 | 모달에서 영구 삭제 | FR-006 | US-008 |
 
 ### 1.3 커버리지 확인
 
@@ -53,9 +56,9 @@
 | FR-002 목록 조회 | TC-API-002, TC-COMP-002, TC-COMP-003 | ✓ |
 | FR-003 상세 조회 | TC-API-003, TC-COMP-005 | ✓ |
 | FR-004 티켓 수정 | TC-API-004, TC-COMP-005 | ✓ |
-| FR-005 티켓 완료 | TC-API-005, TC-INT-001, TC-INT-002 | ✓ |
-| FR-006 티켓 삭제 | TC-API-006, TC-COMP-006, TC-INT-002 | ✓ |
-| FR-007 상태/순서 변경 | TC-API-007, TC-INT-001 | ✓ |
+| FR-005 티켓 완료 | TC-API-005, TC-INT-002, TC-INT-004 | ✓ |
+| FR-006 티켓 삭제 | TC-API-006, TC-COMP-006, TC-INT-005 | ✓ |
+| FR-007 상태/순서 변경 | TC-API-007, TC-INT-001, TC-INT-002, TC-INT-003 | ✓ |
 | FR-008 오버듀 판정 | TC-API-008, TC-COMP-001 | ✓ |
 
 ---
@@ -726,7 +729,28 @@ it('확인을 누르면 삭제가 요청된다', async () => {
 
 여러 계층을 가로지르는 흐름을 검증한다. API는 목킹하고 UI부터 Hook까지를 실제로 동작시킨다.
 
-### 5.1 드래그앤드롭 테스트 방법
+### 5.1 다섯 개로 나눈 이유
+
+통합 테스트는 앱 전체를 세워야 하므로, 한 케이스에 여러 관심사를 담으면
+**첫 구현에서 만들어야 할 것이 한꺼번에 몰린다.** 드래그 배선, `useTickets`의
+낙관적 업데이트, 모달 연동이 동시에 필요해지면 실패했을 때 어디가 문제인지
+가려내기도 어렵다.
+
+각 케이스가 **처음으로 요구하는 것**을 기준으로 나눈다. 앞 케이스가 끝나면
+뒤 케이스는 이미 선 것 위에 하나씩만 얹는다.
+
+| 케이스 | 처음 필요해지는 것 | 앞에서 이미 선 것 |
+|--------|-------------------|------------------|
+| TC-INT-001 | 앱 조립(`page.tsx`·`Header`), `useTickets` 조회·`reorder`, @dnd-kit 배선 | - |
+| TC-INT-002 | `useTickets.move()`의 `complete`/`reorder` 분기 | 001의 전부 |
+| TC-INT-003 | 실패 시 스냅샷 롤백, 에러 노출, 드래그 취소 | 001·002 |
+| TC-INT-004 | 보드 ↔ `TicketModal` 연결 | 001~003 |
+| TC-INT-005 | `useTickets.remove()`와 삭제 후 보드 갱신 | 001~004 |
+
+**TC-INT-001이 가장 무겁다.** 앱이 한 번은 통째로 서야 하므로 피할 수 없다.
+대신 001은 "옮기면 옮겨진다"까지만 보고, 분기·실패·모달은 뒤로 미룬다.
+
+### 5.2 드래그앤드롭 테스트 방법
 
 jsdom은 포인터 이벤트를 완전히 재현하지 못한다.
 @dnd-kit의 **`KeyboardSensor`를 사용해 키보드로 드래그를 수행**한다. 접근성(NFR-003) 검증을 겸한다.
@@ -739,71 +763,134 @@ Space         놓기
 Esc           취소
 ```
 
+`Space`가 집기이고 `Enter`가 아닌 이유는 COMPONENT_SPEC 4.7을 따른다.
+`Enter`는 카드 상세 열기가 쓰므로 `KeyboardSensor`의 활성화 키를 `Space`로 좁힌다.
+
+### 5.3 공통 헬퍼
+
+| 헬퍼 | 하는 일 |
+|------|---------|
+| `renderApp(board)` | `GET /api/tickets`가 `board`를 반환하도록 목킹하고 앱 전체를 렌더링한다 |
+| `columnOf(status)` | 그 칼럼의 `region` 랜드마크를 돌려준다 (COMPONENT_SPEC 3.5) |
+| `dragCardToColumn(제목, status)` | 5.2의 키보드 순서로 카드를 옮긴다 |
+| `mockApi` | `src/client/api/ticketApi` 모듈 목 |
+
+목킹 대상은 `ticketApi`다. `fetch`가 아니라 모듈을 목킹하므로 URL·메서드가 아니라
+**어떤 동작이 요청되었는지**를 검증한다. HTTP 형태는 TC-API가 이미 덮는다.
+
 ---
 
-### TC-INT-001 · 드래그앤드롭 → 상태 변경 → 롤백 (FR-005·FR-007, US-005·US-006)
+### TC-INT-001 · 드래그앤드롭 → 이동 반영 (FR-007, US-005)
+
+카드를 옮기면 화면이 즉시 바뀌고 서버에 요청이 나가는지 본다.
+**분기·실패는 다루지 않는다.**
 
 | ID | 시나리오 | 기대 |
 |----|----------|------|
-| 001-N1 | Backlog 카드를 TODO로 이동 | 카드가 TODO에 나타나고 `/reorder` 호출 |
-| 001-N2 | 이동 직후 화면 | API 응답 전에 이미 이동되어 보인다 (낙관적 업데이트) |
-| 001-N3 | 같은 칼럼 내 순서 변경 | 순서가 바뀌고 `/reorder` 호출 |
-| 001-N4 | Done 칼럼으로 이동 | **`/complete` 호출** (`/reorder` 아님) |
-| 001-N5 | Done에서 In Progress로 이동 | **`/complete` 호출** (completedAt 초기화) |
-| 001-N6 | 역방향 이동 | 허용된다 |
-| 001-E1 | API가 500 반환 | 카드가 **원래 칼럼으로 롤백**된다 |
-| 001-E2 | 롤백 시 | 사용자에게 에러가 안내된다 |
-| 001-E3 | 드래그 중 `Esc` | 아무것도 변경되지 않는다 |
+| 001-N1 | 앱을 연다 | 조회한 보드가 4칼럼에 그려진다 |
+| 001-N2 | Backlog 카드를 TODO로 이동 | 카드가 TODO에 나타나고 `reorder`가 호출된다 |
+| 001-N3 | 이동 직후 화면 | 응답 전에 이미 이동되어 보인다 (낙관적 업데이트) |
+| 001-N4 | 같은 칼럼 내 순서 변경 | 순서가 바뀌고 `reorder`가 호출된다 |
+| 001-N5 | 역방향 이동 (TODO → Backlog) | 허용된다 |
+| 001-N6 | `reorder` 응답 도착 | 서버가 준 `BoardData`로 확정된다 |
+| 001-E1 | 빈 칼럼으로 이동 | `position = 0`으로 요청된다 |
 
 ```typescript
-describe('TC-INT-001: 드래그앤드롭 상태 변경', () => {
-  it('카드를 TODO로 옮기면 화면에 즉시 반영되고 reorder가 호출된다', async () => {
-    const reorder = mockApi.reorder.mockResolvedValue([]);
-    renderApp({ BACKLOG: [ticket({ id: 1, title: 'PRD 초안' })], TODO: [] });
+it('카드를 TODO로 옮기면 화면에 즉시 반영되고 reorder가 호출된다', async () => {
+  mockApi.reorder.mockResolvedValue(emptyBoard());
+  renderApp({ BACKLOG: [ticket({ id: 1, title: 'PRD 초안' })], TODO: [] });
 
-    await dragCardToColumn('PRD 초안', 'TODO');
+  await dragCardToColumn('PRD 초안', 'TODO');
 
-    expect(within(columnOf('TODO')).getByText('PRD 초안')).toBeInTheDocument();
-    expect(reorder).toHaveBeenCalledWith(1, 'TODO', expect.any(Number));
-  });
-
-  it('Done 칼럼으로 옮기면 reorder가 아니라 complete가 호출된다', async () => {
-    renderApp({ IN_PROGRESS: [ticket({ id: 1, title: '보드 구현' })], DONE: [] });
-
-    await dragCardToColumn('보드 구현', 'Done');
-
-    expect(mockApi.complete).toHaveBeenCalledWith(1);
-    expect(mockApi.reorder).not.toHaveBeenCalled();
-  });
-
-  it('API가 실패하면 카드가 원래 칼럼으로 돌아간다', async () => {
-    mockApi.reorder.mockRejectedValue(new Error('500'));
-    renderApp({ BACKLOG: [ticket({ id: 1, title: 'PRD 초안' })], TODO: [] });
-
-    await dragCardToColumn('PRD 초안', 'TODO');
-
-    await waitFor(() => {
-      expect(within(columnOf('BACKLOG')).getByText('PRD 초안')).toBeInTheDocument();
-    });
-    expect(within(columnOf('TODO')).queryByText('PRD 초안')).not.toBeInTheDocument();
-  });
+  expect(within(columnOf('TODO')).getByText('PRD 초안')).toBeInTheDocument();
+  expect(mockApi.reorder).toHaveBeenCalledWith(1, 'TODO', expect.any(Number));
 });
 ```
 
 ---
 
-### TC-INT-002 · 완료 처리 → 영구 삭제 (FR-005·FR-006, US-006·US-008)
+### TC-INT-002 · Done 드롭 → 완료 분기 (FR-005·FR-007, US-005·US-006)
 
-완료와 삭제가 **다른 동작**임을 검증한다.
+`useTickets.move()`가 이동 **대상**만 보고 두 엔드포인트로 갈라지는지 본다
+(COMPONENT_SPEC 6.2, API_SPEC 13.1).
 
 | ID | 시나리오 | 기대 |
 |----|----------|------|
-| 002-N1 | Done으로 이동 | Done 칼럼에 카드가 남아 있다 (사라지지 않음) |
-| 002-N2 | 완료 후 카드 클릭 | 상세 모달이 정상적으로 열린다 |
-| 002-N3 | 완료된 카드를 모달에서 삭제 | 확인 후 보드에서 사라진다 |
-| 002-N4 | 삭제 후 | `DELETE` 호출, 어느 칼럼에도 없다 |
-| 002-E1 | 완료만 하고 삭제 안 함 | `DELETE`가 호출되지 않는다 |
-| 002-E2 | 삭제 확인창에서 취소 | 카드가 그대로 남는다 |
+| 002-N1 | Done 칼럼으로 이동 | **`complete` 호출** — `reorder`는 호출되지 않는다 |
+| 002-N2 | Done에서 In Progress로 이동 | **`reorder` 호출** — 대상이 DONE이 아니다 |
+| 002-N3 | Done에서 나온 뒤 | 서버가 `completedAt`을 지우므로 완료 표시가 사라진다 |
+| 002-N4 | Board 입장 | 어느 칼럼이든 `onMove`를 똑같이 부른다 — 두 엔드포인트를 알지 못한다 |
+| 002-E1 | Backlog → TODO | `complete`는 호출되지 않는다 |
+
+> **002-N2는 이전 판(`001-N5`)의 오류를 고친 것이다.** 예전에는 Done에서
+> 나오는 이동도 `/complete`라고 적혀 있었으나, `/complete`를 부르면 상태가 다시
+> `DONE`이 되어 이동 자체가 무효가 된다. 이동 대상이 DONE이 아니면 `/reorder`이며
+> `completedAt` 초기화는 서버가 한다 (API_SPEC 13.1).
+
+```typescript
+it('Done 칼럼으로 옮기면 reorder가 아니라 complete가 호출된다', async () => {
+  renderApp({ IN_PROGRESS: [ticket({ id: 1, title: '보드 구현' })], DONE: [] });
+
+  await dragCardToColumn('보드 구현', 'Done');
+
+  expect(mockApi.complete).toHaveBeenCalledWith(1);
+  expect(mockApi.reorder).not.toHaveBeenCalled();
+});
+
+it('Done에서 나오는 이동은 complete가 아니라 reorder다', async () => {
+  renderApp({ DONE: [ticket({ id: 1, title: '보드 구현', status: 'DONE' })], IN_PROGRESS: [] });
+
+  await dragCardToColumn('보드 구현', 'In Progress');
+
+  expect(mockApi.reorder).toHaveBeenCalledWith(1, 'IN_PROGRESS', expect.any(Number));
+  expect(mockApi.complete).not.toHaveBeenCalled();
+});
+```
+
+---
+
+### TC-INT-003 · 이동 실패 → 롤백 (FR-007, US-005)
+
+낙관적 업데이트의 뒷면이다. 실패했을 때 화면이 거짓말을 하지 않는지 본다 (NFR-004).
+
+| ID | 시나리오 | 기대 |
+|----|----------|------|
+| 003-N1 | 드래그 중 `Esc` | 아무것도 변경되지 않고 요청도 나가지 않는다 |
+| 003-E1 | `reorder`가 실패 | 카드가 **원래 칼럼으로 롤백**된다 |
+| 003-E2 | 롤백 시 | 사용자에게 에러가 안내된다 |
+| 003-E3 | `complete`가 실패 | 마찬가지로 롤백된다 |
+| 003-E4 | 롤백 후 다시 이동 | 정상적으로 동작한다 (스냅샷이 남아 있지 않다) |
+
+```typescript
+it('API가 실패하면 카드가 원래 칼럼으로 돌아간다', async () => {
+  mockApi.reorder.mockRejectedValue(new Error('500'));
+  renderApp({ BACKLOG: [ticket({ id: 1, title: 'PRD 초안' })], TODO: [] });
+
+  await dragCardToColumn('PRD 초안', 'TODO');
+
+  await waitFor(() => {
+    expect(within(columnOf('BACKLOG')).getByText('PRD 초안')).toBeInTheDocument();
+  });
+  expect(within(columnOf('TODO')).queryByText('PRD 초안')).not.toBeInTheDocument();
+});
+```
+
+> **확정 필요**: 에러를 어디에 어떻게 노출할지가 COMPONENT_SPEC에 없다.
+> `useTickets`는 `error: Error | null`을 돌려줄 뿐이다. Red를 쓰기 전에
+> 노출 위치(앱 상단 배너 등)와 `role="alert"` 사용을 명세에 먼저 정한다.
+
+---
+
+### TC-INT-004 · 완료는 삭제가 아니다 (FR-005, US-006)
+
+`DONE`으로 옮기는 것과 지우는 것이 **다른 동작**임을 확인한다.
+
+| ID | 시나리오 | 기대 |
+|----|----------|------|
+| 004-N1 | Done으로 이동 | Done 칼럼에 카드가 남아 있다 (사라지지 않음) |
+| 004-N2 | 완료 후 카드 클릭 | 상세 모달이 정상적으로 열린다 |
+| 004-N3 | 완료된 카드의 표시 | 완료 표시가 보인다 |
+| 004-E1 | 완료만 하고 삭제 안 함 | `remove`가 호출되지 않는다 |
 
 ```typescript
 it('완료는 삭제가 아니다 — Done으로 옮겨도 카드가 남는다', async () => {
@@ -814,13 +901,29 @@ it('완료는 삭제가 아니다 — Done으로 옮겨도 카드가 남는다',
   expect(within(columnOf('DONE')).getByText('보드 구현')).toBeInTheDocument();
   expect(mockApi.remove).not.toHaveBeenCalled();
 });
+```
 
+---
+
+### TC-INT-005 · 모달에서 영구 삭제 (FR-006, US-008)
+
+되돌릴 수 없는 경로다. 확인을 거쳐야만 지워지고, 지워지면 보드에서 사라진다.
+
+| ID | 시나리오 | 기대 |
+|----|----------|------|
+| 005-N1 | 카드 클릭 → 삭제 → 확인 | `remove`가 호출되고 모달이 닫힌다 |
+| 005-N2 | 삭제 후 보드 | 어느 칼럼에도 그 카드가 없다 |
+| 005-N3 | 삭제 후 | 보드를 다시 조회해 확정한다 |
+| 005-E1 | 삭제 확인창에서 취소 | 카드가 그대로 남고 `remove`가 호출되지 않는다 |
+| 005-E2 | `remove`가 실패 | 카드가 보드에 남는다 |
+
+```typescript
 it('완료된 카드를 삭제하면 보드에서 완전히 사라진다', async () => {
   renderApp({ DONE: [ticket({ id: 1, title: '보드 구현', status: 'DONE' })] });
 
   await userEvent.click(screen.getByRole('button', { name: /보드 구현/ }));
   await userEvent.click(await screen.findByRole('button', { name: '삭제' }));
-  await userEvent.click(screen.getByRole('button', { name: '확인' }));
+  await userEvent.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: '확인' }));
 
   expect(mockApi.remove).toHaveBeenCalledWith(1);
   await waitFor(() => {
