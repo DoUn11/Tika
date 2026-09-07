@@ -27,6 +27,14 @@ export const toValidationError = (error: ZodError): ErrorBody => ({
   },
 });
 
+/**
+ * Zod 검증 이전 단계의 클라이언트 오류 (본문 파싱 실패 등).
+ * 400 응답이므로 code도 VALIDATION_ERROR여야 한다 (API_SPEC 2.4).
+ */
+export const badRequestError = (message: string): ErrorBody => ({
+  error: { code: ERROR_CODE.VALIDATION_ERROR, message },
+});
+
 export const notFoundError = (message = '티켓을 찾을 수 없습니다'): ErrorBody => ({
   error: { code: ERROR_CODE.NOT_FOUND, message },
 });
@@ -34,3 +42,19 @@ export const notFoundError = (message = '티켓을 찾을 수 없습니다'): Er
 export const internalError = (message = '서버 오류가 발생했습니다'): ErrorBody => ({
   error: { code: ERROR_CODE.INTERNAL_ERROR, message },
 });
+
+/**
+ * 서비스 계층에서 올라온 예외를 500 응답으로 변환한다.
+ *
+ * Route Handler가 정상 흐름에만 집중할 수 있게 하고,
+ * 모든 엔드포인트가 같은 에러 형식을 내도록 한 곳에 모은다 (CLAUDE.md).
+ */
+export const withErrorHandling = async (
+  handler: () => Promise<Response>,
+): Promise<Response> => {
+  try {
+    return await handler();
+  } catch {
+    return Response.json(internalError(), { status: 500 });
+  }
+};

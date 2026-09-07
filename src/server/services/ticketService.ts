@@ -65,7 +65,10 @@ export const createTicket = async (input: CreateTicketInput): Promise<Ticket> =>
     })
     .returning();
 
-  return toTicket(row!);
+  if (!row) {
+    throw new Error('티켓 생성에 실패했습니다');
+  }
+  return toTicket(row);
 };
 
 /**
@@ -97,11 +100,22 @@ export const getBoard = async (): Promise<BoardData> => {
     [TICKET_STATUS.DONE]: [],
   };
 
+  // 변환 결과의 status는 이미 TicketStatus라 캐스트가 필요 없다
   for (const row of rows) {
-    board[row.status as TicketStatus]?.push(toTicket(row));
+    const ticket = toTicket(row);
+    board[ticket.status].push(ticket);
   }
 
   return board;
 };
 
-export { toTicket };
+/**
+ * FR-003 티켓 상세 조회.
+ *
+ * 보드 조회(FR-002)와 달리 Done 24시간 필터를 적용하지 않는다.
+ * 보드에서 감춰진 티켓도 상세로는 계속 조회할 수 있어야 한다.
+ */
+export const getTicketById = async (id: number): Promise<Ticket | null> => {
+  const [row] = await getDb().select().from(tickets).where(eq(tickets.id, id)).limit(1);
+  return row ? toTicket(row) : null;
+};

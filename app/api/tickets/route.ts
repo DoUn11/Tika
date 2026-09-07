@@ -1,4 +1,8 @@
-import { internalError, toValidationError } from '@/server/middleware/errorHandler';
+import {
+  badRequestError,
+  toValidationError,
+  withErrorHandling,
+} from '@/server/middleware/errorHandler';
 import { createTicket, getBoard } from '@/server/services/ticketService';
 import { createTicketSchema } from '@/shared/validations/ticketSchema';
 
@@ -7,11 +11,7 @@ export const runtime = 'nodejs';
 
 /** FR-002 보드 조회. 칼럼별로 그룹화된 티켓을 반환한다. */
 export async function GET(): Promise<Response> {
-  try {
-    return Response.json(await getBoard(), { status: 200 });
-  } catch {
-    return Response.json(internalError(), { status: 500 });
-  }
+  return withErrorHandling(async () => Response.json(await getBoard(), { status: 200 }));
 }
 
 /** FR-001 티켓 생성. 요청 파싱 → 검증 → 서비스 호출 → 응답. */
@@ -20,7 +20,7 @@ export async function POST(request: Request): Promise<Response> {
   try {
     body = await request.json();
   } catch {
-    return Response.json(internalError('요청 본문을 읽을 수 없습니다'), { status: 400 });
+    return Response.json(badRequestError('요청 본문이 올바른 JSON이 아닙니다'), { status: 400 });
   }
 
   const parsed = createTicketSchema.safeParse(body);
