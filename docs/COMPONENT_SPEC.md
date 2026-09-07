@@ -28,6 +28,8 @@ app/page.tsx
 │
 ├── Header                        헤더 · "새 티켓" 버튼
 │
+├── ErrorBanner                   실패 안내 (롤백 시 등)
+│
 ├── Board                         DnD 컨텍스트 · 4칼럼 렌더링
 │   └── Column × 4                BACKLOG / TODO / IN_PROGRESS / DONE
 │       └── TicketCard × N        개별 티켓 카드
@@ -49,6 +51,7 @@ app/page.tsx
 | `TicketForm` | 보조 | 티켓 생성 폼 |
 | `TicketModal` | 보조 | 티켓 상세 조회 및 수정 |
 | `ConfirmDialog` | 보조 | 삭제 확인 다이얼로그 |
+| `ErrorBanner` | 보조 | 실패 안내 |
 | `PriorityBadge` | 표시 | 우선순위 뱃지 |
 
 ---
@@ -561,7 +564,35 @@ type ConfirmDialogProps = {
 노출된다"고 하므로 **편집 중에 삭제를 누르면 화면에 "취소" 버튼이 둘**이 된다
 (편집 취소와 삭제 취소). 다이얼로그가 독립된 영역으로 잡혀야 둘을 구분할 수 있다.
 
-### 5.5 PriorityBadge
+### 5.5 ErrorBanner — 실패 안내 (NFR-004)
+
+| 항목 | 내용 |
+|------|------|
+| **책임** | 요청 실패를 사용자에게 알린다 |
+| **Props** | `message: string \| null` |
+
+```typescript
+type ErrorBannerProps = {
+  /** null이면 아무것도 렌더링하지 않는다 */
+  message: string | null;
+};
+```
+
+**왜 필요한가** — 낙관적 업데이트는 실패하면 카드를 원래 자리로 되돌린다(6.5).
+안내가 없으면 사용자에게는 **카드가 저절로 튕겨 나온 것**으로만 보인다.
+무엇이 왜 실패했는지 알려야 다시 시도할지 판단할 수 있다.
+
+| 항목 | 내용 |
+|------|------|
+| 위치 | 헤더 아래, 보드 위 |
+| `role` | `alert` — 스크린 리더가 즉시 읽는다 (NFR-003) |
+| 문구 | `useTickets`의 `error.message`를 그대로 쓴다. 서버가 보낸 문구다 (6.4) |
+| 사라지는 시점 | 다음 요청이 성공하면 사라진다. 따로 닫을 필요가 없다 |
+
+문구를 클라이언트에서 새로 만들지 않는다. `ApiError`가 서버 응답의 `message`를
+담고 있으므로 그대로 보여주면 된다.
+
+### 5.6 PriorityBadge
 
 | 항목 | 내용 |
 |------|------|
