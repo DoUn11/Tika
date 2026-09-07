@@ -1,6 +1,6 @@
 import { notFoundError, withErrorHandling } from '@/server/middleware/errorHandler';
 import { parseJsonBody, parseTicketId } from '@/server/middleware/request';
-import { getTicketById, updateTicket } from '@/server/services/ticketService';
+import { deleteTicket, getTicketById, updateTicket } from '@/server/services/ticketService';
 import type { Ticket } from '@/shared/types/ticket';
 import { updateTicketSchema } from '@/shared/validations/ticketSchema';
 
@@ -36,4 +36,20 @@ export async function PATCH(request: Request, context: RouteContext): Promise<Re
   if (error) return error;
 
   return withErrorHandling(async () => ticketOrNotFound(await updateTicket(ticketId, data)));
+}
+
+/** FR-006 티켓 삭제. 하드 삭제이며 성공 시 본문 없이 204를 반환한다. */
+export async function DELETE(_request: Request, context: RouteContext): Promise<Response> {
+  const ticketId = parseTicketId((await context.params).id);
+  if (ticketId === null) {
+    return Response.json(notFoundError(), { status: 404 });
+  }
+
+  return withErrorHandling(async () => {
+    const deleted = await deleteTicket(ticketId);
+    // 204는 본문이 없어야 하므로 ticketOrNotFound를 쓸 수 없다
+    return deleted
+      ? new Response(null, { status: 204 })
+      : Response.json(notFoundError(), { status: 404 });
+  });
 }

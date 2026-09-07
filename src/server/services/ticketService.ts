@@ -150,6 +150,24 @@ export const updateTicket = async (
 };
 
 /**
+ * FR-006 티켓 삭제. 하드 삭제이며 복구할 수 없다 (MVP 기준).
+ *
+ * 삭제 여부를 boolean으로 반환한다. 204 응답은 본문이 없어야 하므로
+ * 티켓 데이터를 돌려줄 필요가 없다.
+ *
+ * 같은 칼럼의 나머지 position은 재계산하지 않는다. 상대 순서가
+ * 유지되므로 건드릴 이유가 없다 (API_SPEC 8.2).
+ */
+export const deleteTicket = async (id: number): Promise<boolean> => {
+  const deleted = await getDb()
+    .delete(tickets)
+    .where(eq(tickets.id, id))
+    .returning({ id: tickets.id });
+
+  return deleted.length > 0;
+};
+
+/**
  * FR-005 티켓 완료. status를 DONE으로 바꾸고 종료일을 기록한다.
  *
  * startedAt은 건드리지 않는다. 착수 시각은 완료해도 바뀌지 않는다.
