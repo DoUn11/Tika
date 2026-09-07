@@ -395,13 +395,27 @@ type TicketFormProps = {
 
 **입력 필드**
 
-| 필드 | 컨트롤 | 필수 | 기본값 |
-|------|--------|------|--------|
-| `title` | text input | **O** | - |
-| `description` | textarea | X | - |
-| `priority` | select / radio | X | `MEDIUM` |
-| `plannedStartDate` | date picker | X | - |
-| `dueDate` | date picker | X | - |
+| 필드 | 라벨 | 컨트롤 | 필수 | 기본값 |
+|------|------|--------|------|--------|
+| `title` | 제목 | text input | **O** | - |
+| `description` | 설명 | textarea | X | - |
+| `priority` | 우선순위 | radio group | X | `MEDIUM` |
+| `plannedStartDate` | 시작예정일 | date picker | X | - |
+| `dueDate` | 종료예정일 | date picker | X | - |
+
+라벨 문구는 REQUIREMENTS.md의 필드 이름을 그대로 쓴다. 버튼은 **"생성"**과 **"취소"** 두 개다.
+
+**우선순위를 radio로 두는 이유**: 값이 3개뿐이고 각각 색이 다르다.
+셋을 동시에 보여야 색과 등급의 대응을 익힐 수 있다.
+5.3의 편집 모드도 같은 이유로 radio를 쓰므로 두 곳의 조작이 일치한다.
+`<fieldset>` + `<legend>우선순위</legend>`로 묶어 그룹 이름을 준다 (NFR-003).
+
+**빈 선택 필드 처리** — 입력하지 않은 선택 필드는 빈 문자열이 아니라 **값 없이** 보낸다.
+`createTicketSchema`의 날짜 필드는 `YYYY-MM-DD` 형식을 요구하므로, 빈 문자열을
+그대로 넘기면 제목만 입력한 생성이 형식 오류로 막힌다.
+
+**열림/닫힘** — `isOpen`이 `false`면 아무것도 렌더링하지 않는다.
+"취소"는 입력값을 버리고 닫으므로 다시 열면 빈 폼이어야 한다.
 
 **검증** — `@/shared/validations`의 `createTicketSchema`를 사용한다 (NFR-004 이중 검증).
 에러 메시지는 REQUIREMENTS.md의 문구를 그대로 표시한다.
