@@ -25,6 +25,17 @@ export const COLUMN_ORDER = [
   TICKET_STATUS.DONE,
 ] as const;
 
+/**
+ * 칼럼 표시 라벨 (COMPONENT_SPEC 3.2).
+ * 칼럼 헤더와 카드의 접근 가능한 이름이 같은 문구를 써야 하므로 한곳에 둔다.
+ */
+export const COLUMN_LABEL: Record<TicketStatus, string> = {
+  [TICKET_STATUS.BACKLOG]: 'Backlog',
+  [TICKET_STATUS.TODO]: 'TODO',
+  [TICKET_STATUS.IN_PROGRESS]: 'In Progress',
+  [TICKET_STATUS.DONE]: 'Done',
+};
+
 /** position 재계산 시 사용하는 기본 간격. */
 export const POSITION_GAP = 1024;
 
