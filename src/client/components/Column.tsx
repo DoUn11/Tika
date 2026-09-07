@@ -1,5 +1,7 @@
 'use client';
 
+import { useDroppable } from '@dnd-kit/core';
+import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { TICKET_STATUS, type TicketStatus } from '@/shared/constants/ticket';
 import type { Ticket } from '@/shared/types/ticket';
 import { TicketCard } from './TicketCard';
@@ -42,8 +44,12 @@ export const Column = ({ status, tickets, title, onTicketClick }: ColumnProps) =
   // 기준이 소리 없이 바뀌어 낙관적 업데이트 롤백이 깨진다 (COMPONENT_SPEC 2.2).
   const ordered = [...tickets].sort((a, b) => a.position - b.position);
 
+  // 칼럼 자체가 드롭 영역이다. 비어 있는 칼럼도 받을 수 있어야 한다 (3.3)
+  const { setNodeRef } = useDroppable({ id: status });
+
   return (
     <section
+      ref={setNodeRef}
       aria-labelledby={headingId}
       className="flex max-h-full min-h-40 flex-col rounded-lg bg-slate-100 p-3"
     >
@@ -57,17 +63,23 @@ export const Column = ({ status, tickets, title, onTicketClick }: ColumnProps) =
         </span>
       </div>
 
-      {ordered.length === 0 ? (
-        <p className="mt-3 text-xs text-slate-500">{EMPTY_MESSAGE[status]}</p>
-      ) : (
-        <ul className="mt-3 flex flex-col gap-2 overflow-y-auto">
-          {ordered.map((ticket) => (
-            <li key={ticket.id}>
-              <TicketCard ticket={ticket} onClick={() => onTicketClick(ticket.id)} />
-            </li>
-          ))}
-        </ul>
-      )}
+      <SortableContext
+        id={status}
+        items={ordered.map((ticket) => ticket.id)}
+        strategy={verticalListSortingStrategy}
+      >
+        {ordered.length === 0 ? (
+          <p className="mt-3 text-xs text-slate-500">{EMPTY_MESSAGE[status]}</p>
+        ) : (
+          <ul className="mt-3 flex flex-col gap-2 overflow-y-auto">
+            {ordered.map((ticket) => (
+              <li key={ticket.id}>
+                <TicketCard ticket={ticket} onClick={() => onTicketClick(ticket.id)} />
+              </li>
+            ))}
+          </ul>
+        )}
+      </SortableContext>
     </section>
   );
 };
