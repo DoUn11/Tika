@@ -56,6 +56,12 @@ const clientConfig: Config = {
  */
 const config = async (): Promise<Config> => ({
   projects: [await createJestConfig(serverConfig)(), await createJestConfig(clientConfig)()],
+  /**
+   * 서버 스위트가 모두 같은 tika_test DB 하나를 쓰고 매 테스트 전 truncate하므로
+   * 병렬로 돌리면 서로의 데이터를 지운다. maxWorkers는 project별로 지정할 수 없어
+   * 전체를 직렬화한다. 스위트가 늘어 느려지면 워커별 스키마 분리를 검토한다.
+   */
+  maxWorkers: 1,
   coverageDirectory: '<rootDir>/coverage',
   collectCoverageFrom: ['app/**/*.{ts,tsx}', 'src/**/*.{ts,tsx}', '!**/*.d.ts'],
 });

@@ -860,6 +860,8 @@ POSTGRES_URL=postgresql://tika:<password>@localhost:5432/tika_test
 
 - `resetDatabase()`가 매 테스트 전 `tickets` 테이블을 비우므로 **반드시 테스트 전용 DB여야 한다**
 - 커넥션 풀은 `jest.teardown.ts`가 `afterAll`에서 닫는다. 닫지 않으면 Jest가 종료되지 않는다
+- 모든 서버 스위트가 **같은 DB 하나**를 truncate하므로 병렬 실행 시 서로의 데이터를 지운다.
+  `jest.config.ts`의 `maxWorkers: 1`로 직렬화한다. 스위트가 늘어 느려지면 워커별 스키마 분리를 검토한다
 - 실행 환경은 `jest.config.ts`가 `projects`로 분리한다 — `api`·`server`는 node, `client`·`integration`은 jsdom
 
 ### 6.3 날짜 고정
