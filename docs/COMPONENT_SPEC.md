@@ -599,7 +599,34 @@ Done에서 빠져나오는 이동도 대상이 DONE이 아니므로 `reorder()`�
 
 모든 호출은 `src/client/api/ticketApi.ts`를 경유한다. Hook이 직접 `fetch`하지 않는다.
 
-### 6.4 낙관적 업데이트 (NFR-004)
+### 6.4 ticketApi — 전송 계층
+
+`fetch`를 감싸는 얇은 래퍼다. 비즈니스 로직을 두지 않는다.
+
+```typescript
+getBoard():                                       Promise<BoardData>
+getById(id):                                      Promise<Ticket>
+create(input):                                    Promise<Ticket>
+update(id, input):                                Promise<Ticket>
+remove(id):                                       Promise<void>
+reorder(ticketId, status, position):              Promise<BoardData>
+complete(id):                                     Promise<Ticket>
+```
+
+**에러 처리** — 응답이 `2xx`가 아니면 `ApiError`를 던진다.
+`{ error: { code, message } }` 본문의 `message`를 그대로 담으므로, 화면은 이 값을 표시하면 된다.
+
+```typescript
+class ApiError extends Error {
+  code: string;      // VALIDATION_ERROR | NOT_FOUND | INTERNAL_ERROR
+  status: number;
+}
+```
+
+문구를 클라이언트에 다시 정의하지 않는다. 404의 "티켓을 찾을 수 없습니다"는
+서버가 보내는 값이며(API_SPEC 2.4), 양쪽에 같은 문자열을 두면 어긋날 수 있다.
+
+### 6.5 낙관적 업데이트 (NFR-004)
 
 `move`(및 그 하위의 `reorder`·`complete`)에 적용한다.
 
