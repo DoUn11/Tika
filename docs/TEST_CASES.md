@@ -375,6 +375,9 @@ it('완료해도 시작일은 유지된다', async () => {
 
 ### TC-API-007 · `PATCH /api/tickets/reorder` (FR-007)
 
+**응답은 `BoardData` 전체다** (API_SPEC 13.2). 변경된 티켓만이 아니라
+`GET /api/tickets`와 같은 형태를 돌려준다.
+
 **정상 케이스**
 
 | ID | 시나리오 | 기대 결과 |
