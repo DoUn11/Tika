@@ -11,6 +11,7 @@
  * 검증한다. HTTP 형태는 TC-API-007이 이미 덮는다.
  */
 import { screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import * as ticketApi from '@/client/api/ticketApi';
 import { TICKET_STATUS } from '@/shared/constants/ticket';
 import type { BoardData } from '@/shared/types/ticket';
@@ -173,6 +174,58 @@ describe('TC-INT-001: 드래그앤드롭 → 이동 반영', () => {
         ).toBeInTheDocument();
       });
       expect(within(columnOf(TICKET_STATUS.TODO)).queryByText('PRD 초안')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('001-N7 · 드래그 중 미리보기', () => {
+    /**
+     * 미리보기가 없으면 카드에 transform이 붙지 않아 제자리에 머물다가
+     * 드롭 순간 새 칼럼으로 순간이동한다 (COMPONENT_SPEC 4.6).
+     *
+     * jsdom은 레이아웃이 없어 "커서를 따라간다"는 확인할 수 없다.
+     * 미리보기가 존재하는지까지만 본다.
+     */
+    it('집는 순간 카드 미리보기가 함께 보인다', async () => {
+      renderApp({ [TICKET_STATUS.BACKLOG]: [ticket({ id: 1, title: 'PRD 초안' })] });
+
+      const card = await screen.findByRole('button', { name: /^PRD 초안,/ });
+      expect(screen.getAllByText('PRD 초안')).toHaveLength(1);
+
+      card.focus();
+      await userEvent.keyboard('[Space]');
+
+      expect(screen.getAllByText('PRD 초안')).toHaveLength(2);
+    });
+
+    it('놓으면 미리보기가 사라진다', async () => {
+      renderApp({ [TICKET_STATUS.BACKLOG]: [ticket({ id: 1, title: 'PRD 초안' })] });
+
+      await dragCardToColumn('PRD 초안', TICKET_STATUS.TODO);
+
+      expect(screen.getAllByText('PRD 초안')).toHaveLength(1);
+    });
+
+    it('취소해도 미리보기가 사라진다', async () => {
+      renderApp({ [TICKET_STATUS.BACKLOG]: [ticket({ id: 1, title: 'PRD 초안' })] });
+
+      const card = await screen.findByRole('button', { name: /^PRD 초안,/ });
+      card.focus();
+      await userEvent.keyboard('[Space]');
+      await userEvent.keyboard('{Escape}');
+
+      expect(screen.getAllByText('PRD 초안')).toHaveLength(1);
+    });
+
+    // 미리보기는 스크린 리더에 두 번 읽히면 안 된다.
+    // @dnd-kit이 자체 라이브 리전으로 이미 알린다.
+    it('미리보기는 접근성 트리에 노출되지 않는다', async () => {
+      renderApp({ [TICKET_STATUS.BACKLOG]: [ticket({ id: 1, title: 'PRD 초안' })] });
+
+      const card = await screen.findByRole('button', { name: /^PRD 초안,/ });
+      card.focus();
+      await userEvent.keyboard('[Space]');
+
+      expect(screen.getAllByRole('button', { name: /^PRD 초안,/ })).toHaveLength(1);
     });
   });
 
