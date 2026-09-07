@@ -6,7 +6,7 @@
  * 이 파일은 @/shared/만 참조하므로 양쪽 환경에서 안전하다.
  */
 import { TICKET_PRIORITY, TICKET_STATUS } from '@/shared/constants/ticket';
-import type { Ticket } from '@/shared/types/ticket';
+import type { BoardData, Ticket } from '@/shared/types/ticket';
 
 let sequence = 0;
 
@@ -32,4 +32,23 @@ export const ticket = (overrides: Partial<Ticket> = {}): Ticket => ({
   updatedAt: '2026-09-01T00:00:00.000Z',
   isOverdue: false,
   ...overrides,
+});
+
+/** 4개 칼럼이 모두 비어 있는 보드. GET /api/tickets가 티켓 없이 반환하는 형태다. */
+export const emptyBoard = (): BoardData => ({
+  [TICKET_STATUS.BACKLOG]: [],
+  [TICKET_STATUS.TODO]: [],
+  [TICKET_STATUS.IN_PROGRESS]: [],
+  [TICKET_STATUS.DONE]: [],
+});
+
+/**
+ * 일부 칼럼만 채운 보드를 만든다.
+ *
+ * 티켓의 status를 보고 칼럼을 정하지 않는다. Board가 board를 그대로 받아
+ * 그리는지(COMPONENT_SPEC 2.1) 검증하려면 둘을 어긋나게 줄 수 있어야 한다.
+ */
+export const boardWith = (columns: Partial<BoardData> = {}): BoardData => ({
+  ...emptyBoard(),
+  ...columns,
 });
