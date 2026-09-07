@@ -73,19 +73,32 @@ export const useTickets = () => {
    *
    * 낙관적 업데이트를 쓰지 않는다. 카드 위치가 바뀌지 않아 즉시 반영의
    * 이득이 작고, 응답 뒤 보드를 다시 읽는 편이 단순하다 (COMPONENT_SPEC 6.5).
+   *
+   * 실패해도 던지지 않고 문구만 남긴다. 보드를 건드리기 전에 멈추므로
+   * 되돌릴 것이 없고, 실패는 ErrorBanner 한 곳으로 모은다 (5.5).
    */
   const updateTicket = useCallback(
     async (id: number, input: UpdateTicketInput): Promise<void> => {
-      await update(id, input);
-      await refetch();
+      try {
+        await update(id, input);
+        setError(null);
+        await refetch();
+      } catch (cause) {
+        setError(toError(cause));
+      }
     },
     [refetch],
   );
 
   const removeTicket = useCallback(
     async (id: number): Promise<void> => {
-      await remove(id);
-      await refetch();
+      try {
+        await remove(id);
+        setError(null);
+        await refetch();
+      } catch (cause) {
+        setError(toError(cause));
+      }
     },
     [refetch],
   );
